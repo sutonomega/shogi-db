@@ -70,6 +70,14 @@
         </section>
         <aside class="position-panel" aria-label="局面情報">
           <h2 id="viewerTitle">対局</h2>
+          <section class="eval-panel" aria-label="評価値グラフ">
+            <div class="panel-heading">
+              <h3>評価値グラフ</h3>
+              <span id="evalSummary">評価値なし</span>
+            </div>
+            <svg class="eval-graph" id="evalGraph" viewBox="0 0 640 220" role="img" aria-label="先手視点の評価値推移"></svg>
+            <p class="eval-empty" id="evalGraphStatus">解析データなし</p>
+          </section>
           <dl>
             <div>
               <dt>手番</dt>
@@ -78,6 +86,10 @@
             <div>
               <dt>指し手</dt>
               <dd id="positionMove">開始局面</dd>
+            </div>
+            <div>
+              <dt>評価値</dt>
+              <dd id="positionEval">なし</dd>
             </div>
             <div>
               <dt>SFEN</dt>

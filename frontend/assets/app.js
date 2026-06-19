@@ -47,7 +47,12 @@ const lastMoveButton = document.querySelector("#lastMoveButton");
 const viewerTitle = document.querySelector("#viewerTitle");
 const positionMoveNumber = document.querySelector("#positionMoveNumber");
 const positionMove = document.querySelector("#positionMove");
+const positionEval = document.querySelector("#positionEval");
 const positionSfen = document.querySelector("#positionSfen");
+const evalGraph = document.querySelector("#evalGraph");
+const evalSummary = document.querySelector("#evalSummary");
+const evalGraphStatus = document.querySelector("#evalGraphStatus");
+const svgNamespace = "http://www.w3.org/2000/svg";
 
 function formatDate(value) {
   if (!value) return "未設定";
@@ -243,7 +248,9 @@ function renderBoard() {
   viewerTitle.textContent = state.game ? `${state.game.black} vs ${state.game.white}` : "対局";
   positionMoveNumber.textContent = `${position.move_number}手目`;
   positionMove.textContent = position.move || "開始局面";
+  positionEval.textContent = formatEvalWithDelta(state.currentMove);
   positionSfen.textContent = position.sfen;
+  renderEvalGraph();
 
   firstMoveButton.disabled = state.currentMove === 0;
   prevMoveButton.disabled = state.currentMove === 0;
@@ -261,6 +268,151 @@ function pieceLabel(piece) {
 function formatHand(pieces) {
   if (!pieces.length) return "なし";
   return pieces.map((item) => `${item.piece}${item.count > 1 ? item.count : ""}`).join(" ");
+}
+
+function numericEval(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function formatEval(value) {
+  const evalValue = numericEval(value);
+  if (evalValue === null) return "なし";
+  return evalValue > 0 ? `+${evalValue}` : `${evalValue}`;
+}
+
+function formatEvalWithDelta(index) {
+  const current = numericEval(state.positions[index]?.eval);
+  if (current === null) return "なし";
+
+  let previous = null;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    previous = numericEval(state.positions[cursor]?.eval);
+    if (previous !== null) break;
+  }
+  if (previous === null) return formatEval(current);
+
+  const delta = current - previous;
+  return `${formatEval(current)} (${delta >= 0 ? "+" : ""}${delta})`;
+}
+
+function clippedEval(value) {
+  return Math.max(-1000, Math.min(1000, value));
+}
+
+function renderEvalGraph() {
+  evalGraph.textContent = "";
+  const points = state.positions.map((position, index) => ({
+    index,
+    moveNumber: position.move_number ?? index,
+    eval: numericEval(position.eval),
+  }));
+  const visiblePoints = points.filter((point) => point.eval !== null);
+
+  if (!visiblePoints.length) {
+    evalGraph.hidden = true;
+    evalGraphStatus.hidden = false;
+    evalSummary.textContent = "評価値なし";
+    return;
+  }
+
+  evalGraph.hidden = false;
+  evalGraphStatus.hidden = true;
+  const currentEval = numericEval(state.positions[state.currentMove]?.eval);
+  evalSummary.textContent = currentEval === null ? "現在値なし" : formatEval(currentEval);
+
+  const width = 640;
+  const height = 220;
+  const padding = { top: 18, right: 22, bottom: 30, left: 44 };
+  const graphWidth = width - padding.left - padding.right;
+  const graphHeight = height - padding.top - padding.bottom;
+  const maxIndex = Math.max(points.length - 1, 1);
+  const xFor = (index) => padding.left + (index / maxIndex) * graphWidth;
+  const yFor = (evalValue) => padding.top + ((1000 - clippedEval(evalValue)) / 2000) * graphHeight;
+
+  drawGraphLine(padding.left, yFor(1000), width - padding.right, yFor(1000), "eval-grid");
+  drawGraphLine(padding.left, yFor(0), width - padding.right, yFor(0), "eval-zero");
+  drawGraphLine(padding.left, yFor(-1000), width - padding.right, yFor(-1000), "eval-grid");
+  drawGraphLine(xFor(state.currentMove), padding.top, xFor(state.currentMove), height - padding.bottom, "eval-current");
+
+  for (const label of [
+    { text: "+1000", y: yFor(1000) },
+    { text: "0", y: yFor(0) },
+    { text: "-1000", y: yFor(-1000) },
+  ]) {
+    const text = svgElement("text", {
+      x: 8,
+      y: label.y + 4,
+      class: "eval-axis-label",
+    });
+    text.textContent = label.text;
+    evalGraph.appendChild(text);
+  }
+
+  const lastMoveNumber = points[points.length - 1]?.moveNumber ?? maxIndex;
+  for (const label of [
+    { text: "0手", x: padding.left, anchor: "start" },
+    { text: `${lastMoveNumber}手`, x: width - padding.right, anchor: "end" },
+  ]) {
+    const text = svgElement("text", {
+      x: label.x.toFixed(1),
+      y: height - 8,
+      class: "eval-axis-label",
+      "text-anchor": label.anchor,
+    });
+    text.textContent = label.text;
+    evalGraph.appendChild(text);
+  }
+
+  let pathData = "";
+  for (const point of points) {
+    if (point.eval === null) {
+      appendEvalPath(pathData);
+      pathData = "";
+      continue;
+    }
+    const command = pathData ? "L" : "M";
+    pathData += `${command} ${xFor(point.index).toFixed(1)} ${yFor(point.eval).toFixed(1)} `;
+  }
+  appendEvalPath(pathData);
+
+  for (const point of visiblePoints) {
+    const circle = svgElement("circle", {
+      cx: xFor(point.index).toFixed(1),
+      cy: yFor(point.eval).toFixed(1),
+      r: point.index === state.currentMove ? 4.8 : 3.2,
+      class: point.index === state.currentMove ? "eval-point current" : "eval-point",
+    });
+    const title = svgElement("title");
+    title.textContent = `${point.moveNumber}手目 ${formatEval(point.eval)}`;
+    circle.appendChild(title);
+    evalGraph.appendChild(circle);
+  }
+}
+
+function appendEvalPath(pathData) {
+  if (!pathData.trim()) return;
+  evalGraph.appendChild(svgElement("path", {
+    d: pathData.trim(),
+    class: "eval-line",
+  }));
+}
+
+function drawGraphLine(x1, y1, x2, y2, className) {
+  evalGraph.appendChild(svgElement("line", {
+    x1: x1.toFixed(1),
+    y1: y1.toFixed(1),
+    x2: x2.toFixed(1),
+    y2: y2.toFixed(1),
+    class: className,
+  }));
+}
+
+function svgElement(name, attributes = {}) {
+  const element = document.createElementNS(svgNamespace, name);
+  for (const [key, value] of Object.entries(attributes)) {
+    element.setAttribute(key, value);
+  }
+  return element;
 }
 
 function setCurrentMove(moveNumber) {

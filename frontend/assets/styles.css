@@ -328,6 +328,98 @@ input {
   letter-spacing: 0;
 }
 
+.eval-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.panel-heading span {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.eval-graph {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.eval-graph[hidden],
+.eval-empty[hidden] {
+  display: none;
+}
+
+.eval-grid {
+  stroke: #dfe5ea;
+  stroke-width: 1;
+}
+
+.eval-zero {
+  stroke: #8b98a5;
+  stroke-dasharray: 6 5;
+  stroke-width: 1.5;
+}
+
+.eval-current {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.eval-line {
+  fill: none;
+  stroke: #1f6f8b;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.eval-point {
+  fill: #1f6f8b;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.eval-point.current {
+  fill: var(--accent);
+  stroke: #163f2d;
+  stroke-width: 2;
+}
+
+.eval-axis-label {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+.eval-empty {
+  margin: 0;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 36px 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .position-panel dl {
   display: grid;
   gap: 12px;
