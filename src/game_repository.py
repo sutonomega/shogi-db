@@ -22,10 +22,21 @@ class StoredGame:
     raw_kif: str
 
 
+@dataclass
+class StoredPosition:
+    move_number: int
+    sfen: str
+    move: str | None
+    eval: int | None
+    best_move: str | None
+    pv: str | None
+    candidates: str
+
+
 class GameRepository:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
-        self.connection = sqlite3.connect(self.db_path)
+        self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
 
@@ -152,20 +163,51 @@ class GameRepository:
             raw_kif=row["raw_kif"],
         )
 
-    def list_positions(self, game_id: int) -> list[sqlite3.Row]:
-        return list(
-            self.connection.execute(
-                """
-                SELECT
-                    move_number, sfen, move, eval,
-                    best_move, pv, candidates
-                FROM positions
-                WHERE game_id = ?
-                ORDER BY move_number
-                """,
-                (game_id,),
+    def list_games(self) -> list[StoredGame]:
+        rows = self.connection.execute(
+            """
+            SELECT id, played_at, black, white, winner, move_count, raw_kif
+            FROM games
+            ORDER BY id DESC
+            """
+        ).fetchall()
+        return [
+            StoredGame(
+                id=int(row["id"]),
+                played_at=row["played_at"],
+                black=row["black"],
+                white=row["white"],
+                winner=row["winner"],
+                move_count=int(row["move_count"]),
+                raw_kif=row["raw_kif"],
             )
-        )
+            for row in rows
+        ]
+
+    def list_positions(self, game_id: int) -> list[StoredPosition]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                move_number, sfen, move, eval,
+                best_move, pv, candidates
+            FROM positions
+            WHERE game_id = ?
+            ORDER BY move_number
+            """,
+            (game_id,),
+        ).fetchall()
+        return [
+            StoredPosition(
+                move_number=int(row["move_number"]),
+                sfen=row["sfen"],
+                move=row["move"],
+                eval=row["eval"],
+                best_move=row["best_move"],
+                pv=row["pv"],
+                candidates=row["candidates"],
+            )
+            for row in rows
+        ]
 
     def _dump_candidates(self, position: PositionRecord) -> str:
         return json.dumps(
