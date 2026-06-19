@@ -47,7 +47,10 @@ CREATE TABLE positions (
     eval        INTEGER,           -- 評価値（先手視点 cp）。NULL = 解析なし
     best_move   TEXT,              -- 水匠の最善手（USI 形式）
     pv          TEXT,              -- 読み筋（スペース区切り USI）
-    candidates  TEXT               -- 候補手 JSON（後述）
+    candidates  TEXT,              -- 候補手 JSON（後述）
+    analyzed_at TEXT,              -- 水匠などで後解析した日時（Phase 4 以降）
+    engine_name TEXT,              -- 解析エンジン名（例: Suisho5）
+    engine_depth INTEGER           -- 解析深さ（例: 18）
 );
 
 CREATE INDEX idx_positions_game_id ON positions(game_id);
@@ -63,6 +66,12 @@ CREATE INDEX idx_positions_sfen    ON positions(sfen);
   { "move": "6i7h", "eval": 80 }
 ]
 ```
+
+### 後解析メタ情報
+
+`analyzed_at`, `engine_name`, `engine_depth` は Phase 4 以降の水匠解析連携で使用する。MVP では NULL のまま扱う。
+
+水匠解析では保存済み `positions.sfen` を USI エンジンに渡し、USI 出力から `eval`, `best_move`, `pv`, `candidates` を取得して同じ `positions` レコードへ追記する。
 
 ---
 
