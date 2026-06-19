@@ -6,6 +6,7 @@ the MVP endpoints without introducing framework setup yet.
 """
 
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -16,6 +17,7 @@ from .game_repository import GameRepository
 
 class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     api: ShogiDbApi
+    static_root: Path
 
     def do_POST(self) -> None:
         if self.path != "/api/games/import":
@@ -37,6 +39,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         try:
+            if path == "/" or path.startswith("/assets/"):
+                self._send_static(path)
+                return
+
             if path == "/api/games":
                 self._send_json(self.api.list_games(), 200)
                 return
@@ -83,19 +89,39 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_static(self, path: str) -> None:
+        relative_path = "index.html" if path == "/" else path.removeprefix("/")
+        file_path = (self.static_root / relative_path).resolve()
+        static_root = self.static_root.resolve()
+
+        if not file_path.is_file() or static_root not in file_path.parents:
+            self._send_json({"error": "Not found"}, 404)
+            return
+
+        content = file_path.read_bytes()
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
 
 def create_server(
     db_path: str | Path = "shogi.db",
     host: str = "127.0.0.1",
     port: int = 8000,
+    static_root: str | Path | None = None,
 ) -> ThreadingHTTPServer:
     repository = GameRepository(db_path)
     api = ShogiDbApi(repository)
+    root = Path(static_root) if static_root is not None else Path(__file__).resolve().parent.parent / "frontend"
 
     class Handler(ShogiDbRequestHandler):
         pass
 
     Handler.api = api
+    Handler.static_root = root
     return ThreadingHTTPServer((host, port), Handler)
 
 
