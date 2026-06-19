@@ -56,19 +56,19 @@ class TestGameRepository(unittest.TestCase):
         stored_positions = self.repository.list_positions(game_id)
 
         self.assertEqual(len(stored_positions), 4)
-        self.assertEqual(stored_positions[0]["move_number"], 0)
-        self.assertEqual(stored_positions[0]["move"], None)
+        self.assertEqual(stored_positions[0].move_number, 0)
+        self.assertEqual(stored_positions[0].move, None)
         self.assertEqual(
-            stored_positions[0]["sfen"],
+            stored_positions[0].sfen,
             "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
         )
-        self.assertEqual(stored_positions[1]["move_number"], 1)
-        self.assertEqual(stored_positions[1]["move"], "7g7f")
-        self.assertEqual(stored_positions[1]["eval"], 64)
-        self.assertEqual(stored_positions[1]["best_move"], "7g7f")
-        self.assertEqual(stored_positions[1]["pv"], "7g7f 3c3d 2g2f")
+        self.assertEqual(stored_positions[1].move_number, 1)
+        self.assertEqual(stored_positions[1].move, "7g7f")
+        self.assertEqual(stored_positions[1].eval, 64)
+        self.assertEqual(stored_positions[1].best_move, "7g7f")
+        self.assertEqual(stored_positions[1].pv, "7g7f 3c3d 2g2f")
         self.assertEqual(
-            json.loads(stored_positions[1]["candidates"]),
+            json.loads(stored_positions[1].candidates),
             [
                 {"move": "2g2f", "eval": 55},
                 {"move": "6i7h", "eval": 40},
