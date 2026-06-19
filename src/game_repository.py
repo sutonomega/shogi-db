@@ -51,6 +51,22 @@ class StrategyStats:
         return self.wins / decisive_games
 
 
+@dataclass
+class EnclosureStats:
+    enclosure: str
+    games: int
+    wins: int
+    losses: int
+    draws: int
+
+    @property
+    def win_rate(self) -> float | None:
+        decisive_games = self.wins + self.losses
+        if decisive_games == 0:
+            return None
+        return self.wins / decisive_games
+
+
 class GameRepository:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
@@ -258,6 +274,32 @@ class GameRepository:
         return [
             StrategyStats(
                 strategy=row["strategy"],
+                games=int(row["games"]),
+                wins=int(row["wins"]),
+                losses=int(row["losses"]),
+                draws=int(row["draws"]),
+            )
+            for row in rows
+        ]
+
+    def list_enclosure_stats(self) -> list[EnclosureStats]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                enclosure,
+                COUNT(*) AS games,
+                SUM(CASE WHEN winner = 'black' THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN winner = 'white' THEN 1 ELSE 0 END) AS losses,
+                SUM(CASE WHEN winner = 'draw' THEN 1 ELSE 0 END) AS draws
+            FROM games
+            WHERE enclosure IS NOT NULL
+            GROUP BY enclosure
+            ORDER BY games DESC, enclosure ASC
+            """
+        ).fetchall()
+        return [
+            EnclosureStats(
+                enclosure=row["enclosure"],
                 games=int(row["games"]),
                 wins=int(row["wins"]),
                 losses=int(row["losses"]),
