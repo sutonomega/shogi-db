@@ -1,5 +1,6 @@
 const state = {
   games: [],
+  strategyStats: [],
   positions: [],
   game: null,
   query: "",
@@ -28,6 +29,9 @@ const promotedLabels = {
 
 const rowsElement = document.querySelector("#gameRows");
 const statusPanel = document.querySelector("#statusPanel");
+const strategyStatsPanel = document.querySelector("#strategyStatsPanel");
+const strategyStatsList = document.querySelector("#strategyStatsList");
+const strategyStatsSummary = document.querySelector("#strategyStatsSummary");
 const summaryText = document.querySelector("#summaryText");
 const searchInput = document.querySelector("#searchInput");
 const refreshButton = document.querySelector("#refreshButton");
@@ -106,6 +110,7 @@ function setStatus(message, kind = "info") {
 function showListView() {
   pageSubtitle.textContent = "対局一覧";
   listToolbar.hidden = false;
+  strategyStatsPanel.hidden = false;
   gameListView.hidden = false;
   viewerView.hidden = true;
   backButton.hidden = true;
@@ -115,6 +120,7 @@ function showListView() {
 function showViewerView() {
   pageSubtitle.textContent = "棋譜ビューア";
   listToolbar.hidden = true;
+  strategyStatsPanel.hidden = true;
   gameListView.hidden = true;
   viewerView.hidden = false;
   backButton.hidden = false;
@@ -163,6 +169,43 @@ function renderList() {
     row.appendChild(tableCell(`${game.move_count ?? 0}手`));
     rowsElement.appendChild(row);
   }
+}
+
+function renderStrategyStats() {
+  strategyStatsList.textContent = "";
+  strategyStatsSummary.textContent = `${state.strategyStats.length}件`;
+
+  if (!state.strategyStats.length) {
+    const empty = document.createElement("p");
+    empty.className = "stats-empty";
+    empty.textContent = "戦法データはありません";
+    strategyStatsList.appendChild(empty);
+    return;
+  }
+
+  for (const stats of state.strategyStats) {
+    const item = document.createElement("article");
+    item.className = "stats-item";
+
+    const name = document.createElement("strong");
+    name.textContent = stats.strategy;
+    item.appendChild(name);
+
+    const details = document.createElement("span");
+    details.textContent = `${stats.games}局 / 勝率 ${formatPercent(stats.win_rate)}`;
+    item.appendChild(details);
+
+    const record = document.createElement("small");
+    record.textContent = `${stats.wins}勝 ${stats.losses}敗 ${stats.draws}分`;
+    item.appendChild(record);
+
+    strategyStatsList.appendChild(item);
+  }
+}
+
+function formatPercent(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${Math.round(value * 100)}%`;
 }
 
 function tableCell(text) {
@@ -456,17 +499,28 @@ async function loadGames() {
   showListView();
   setStatus("読み込み中");
   try {
-    const response = await fetch("/api/games");
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const [gamesResponse, statsResponse] = await Promise.all([
+      fetch("/api/games"),
+      fetch("/api/stats/strategies"),
+    ]);
+    if (!gamesResponse.ok) {
+      throw new Error(`HTTP ${gamesResponse.status}`);
     }
-    const payload = await response.json();
+    if (!statsResponse.ok) {
+      throw new Error(`HTTP ${statsResponse.status}`);
+    }
+    const payload = await gamesResponse.json();
+    const statsPayload = await statsResponse.json();
     state.games = Array.isArray(payload.games) ? payload.games : [];
+    state.strategyStats = Array.isArray(statsPayload.strategies) ? statsPayload.strategies : [];
     setStatus("");
+    renderStrategyStats();
     renderList();
   } catch (error) {
     state.games = [];
+    state.strategyStats = [];
     setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
+    renderStrategyStats();
     renderList();
   }
 }

@@ -47,6 +47,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.list_games(), 200)
                 return
 
+            if path == "/api/stats/strategies":
+                self._send_json(self.api.get_strategy_stats(), 200)
+                return
+
             parts = path.strip("/").split("/")
             if (
                 len(parts) == 4

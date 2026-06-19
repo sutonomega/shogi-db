@@ -1,5 +1,6 @@
 import json
 import unittest
+from dataclasses import replace
 
 from src.game_repository import GameRepository
 from src.kif_parser import KifParser
@@ -72,6 +73,25 @@ class TestGameRepository(unittest.TestCase):
         stored = self.repository.get_game(game_id)
 
         self.assertEqual(stored.enclosure, "美濃囲い")
+
+    def test_list_strategy_stats(self):
+        white_win_game = replace(self.game, raw_kif=f"{self.game.raw_kif}\n#2", winner="white")
+        draw_game = replace(self.game, raw_kif=f"{self.game.raw_kif}\n#3", winner="draw")
+        other_game = replace(self.game, raw_kif=f"{self.game.raw_kif}\n#4", winner="black")
+        self.repository.save_game(self.game, self.positions, strategy="四間飛車")
+        self.repository.save_game(white_win_game, self.positions, strategy="四間飛車")
+        self.repository.save_game(draw_game, self.positions, strategy="四間飛車")
+        self.repository.save_game(other_game, self.positions, strategy="角換わり")
+
+        stats = self.repository.list_strategy_stats()
+
+        self.assertEqual(stats[0].strategy, "四間飛車")
+        self.assertEqual(stats[0].games, 3)
+        self.assertEqual(stats[0].wins, 1)
+        self.assertEqual(stats[0].losses, 1)
+        self.assertEqual(stats[0].draws, 1)
+        self.assertEqual(stats[0].win_rate, 0.5)
+        self.assertEqual(stats[1].strategy, "角換わり")
 
     def test_save_positions_with_sfen_and_analysis(self):
         game_id = self.repository.save_game(self.game, self.positions)
