@@ -4,6 +4,7 @@ Application API operations for importing and reading games.
 
 import json
 
+from .enclosure_detector import EnclosureDetector
 from .game_repository import GameRepository, StoredGame, StoredPosition
 from .kif_parser import KifParser
 from .sfen_generator import SfenGenerator
@@ -29,7 +30,13 @@ class ShogiDbApi:
         game = KifParser().parse(kif_text)
         positions = SfenGenerator().generate(game)
         strategy = StrategyDetector().detect(positions)
-        game_id = self.repository.save_game(game, positions, strategy=strategy)
+        enclosure = EnclosureDetector().detect(positions)
+        game_id = self.repository.save_game(
+            game,
+            positions,
+            strategy=strategy,
+            enclosure=enclosure,
+        )
 
         return {
             "game": self._game_to_dict(self.repository.get_game(game_id)),

@@ -63,6 +63,16 @@ class TestGameRepository(unittest.TestCase):
 
         self.assertEqual(stored.strategy, "四間飛車")
 
+    def test_save_enclosure(self):
+        game_id = self.repository.save_game(
+            self.game,
+            self.positions,
+            enclosure="美濃囲い",
+        )
+        stored = self.repository.get_game(game_id)
+
+        self.assertEqual(stored.enclosure, "美濃囲い")
+
     def test_save_positions_with_sfen_and_analysis(self):
         game_id = self.repository.save_game(self.game, self.positions)
         stored_positions = self.repository.list_positions(game_id)
