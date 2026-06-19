@@ -84,6 +84,23 @@ KIF_NO_HEADER_DATE = """\
 まで1手で先手の勝ち
 """
 
+KIF_WITH_VARIATION_AFTER_MAINLINE = """\
+開始日時：2024/05/01 12:00:00
+手合割：平手
+先手：本譜A
+後手：本譜B
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+   3 ２六歩(27)    ( 0:01/00:00:02)
+   4 投了
+まで3手で先手の勝ち
+
+変化：46手
+  47 ７三歩成(74)       ( 0:00/00:00:54)
+  48 同　桂(81)         ( 0:00/00:00:54)
+"""
+
 
 # ---------------------------------------------------------------------------
 # テストクラス
@@ -150,6 +167,21 @@ class TestMoves(unittest.TestCase):
 
     def test_time_str(self):
         self.assertEqual(self.record.moves[0].time_str, "0:05")
+
+
+class TestVariation(unittest.TestCase):
+    def setUp(self):
+        self.record = KifParser().parse(KIF_WITH_VARIATION_AFTER_MAINLINE)
+
+    def test_variation_moves_are_not_included(self):
+        move_texts = [move.move_kif for move in self.record.moves]
+
+        self.assertNotIn("７三歩成(74)", move_texts)
+        self.assertNotIn("同　桂(81)", move_texts)
+
+    def test_move_count_is_mainline_only(self):
+        self.assertEqual(self.record.move_count, 3)
+        self.assertEqual(len(self.record.moves), 3)
 
 
 class TestNoAnalysis(unittest.TestCase):

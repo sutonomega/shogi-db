@@ -74,6 +74,7 @@ class KifParser:
     _RE_PLAYED_AT = re.compile(r"^開始日時[：:]\s*(.+)")
     _RE_BLACK     = re.compile(r"^先手[：:]\s*(.+)")
     _RE_WHITE     = re.compile(r"^後手[：:]\s*(.+)")
+    _RE_VARIATION = re.compile(r"^\s*変化[：:]")
 
     # 指し手行: "   1 ７六歩(77)   ( 0:01/00:00:01)"
     _RE_MOVE = re.compile(
@@ -116,6 +117,9 @@ class KifParser:
         i = 0
         while i < len(lines):
             line = lines[i]
+
+            if self._RE_VARIATION.match(line):
+                break
 
             # --- ヘッダー解析 ---
             if m := self._RE_PLAYED_AT.match(line):
