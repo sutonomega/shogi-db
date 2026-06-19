@@ -74,6 +74,7 @@ class KifParser:
     _RE_PLAYED_AT = re.compile(r"^開始日時[：:]\s*(.+)")
     _RE_BLACK     = re.compile(r"^先手[：:]\s*(.+)")
     _RE_WHITE     = re.compile(r"^後手[：:]\s*(.+)")
+    _RE_VARIATION = re.compile(r"^\s*変化[：:]")
 
     # 指し手行: "   1 ７六歩(77)   ( 0:01/00:00:01)"
     _RE_MOVE = re.compile(
@@ -116,10 +117,14 @@ class KifParser:
         white = "後手"
         winner: str | None = None
         moves: list[MoveRecord] = []
+        pending_analysis: tuple[int | None, str | None, str | None, list[Candidate]] | None = None
 
         i = 0
         while i < len(lines):
             line = lines[i]
+
+            if self._RE_VARIATION.match(line):
+                break
 
             # --- ヘッダー解析 ---
             if m := self._RE_PLAYED_AT.match(line):
@@ -153,6 +158,14 @@ class KifParser:
                 i += 1
                 continue
 
+            # --- 指し手の前にある解析行 ---
+            if self._RE_ANALYSIS_HEADER.match(line):
+                eval_val, best_move, pv, candidates, consumed = \
+                    self._parse_analysis_block(lines, i)
+                pending_analysis = (eval_val, best_move, pv, candidates)
+                i += consumed
+                continue
+
             # --- 指し手行 ---
             if m := self._RE_MOVE.match(line):
                 move_number = int(m.group(1))
@@ -164,9 +177,14 @@ class KifParser:
                     i += 1
                     continue
 
-                # 解析コメントを先読み
-                eval_val, best_move, pv, candidates, consumed = \
-                    self._parse_analysis_block(lines, i + 1)
+                if pending_analysis is not None:
+                    eval_val, best_move, pv, candidates = pending_analysis
+                    consumed = 0
+                    pending_analysis = None
+                else:
+                    # 解析コメントを先読み
+                    eval_val, best_move, pv, candidates, consumed = \
+                        self._parse_analysis_block(lines, i + 1)
 
                 moves.append(MoveRecord(
                     move_number=move_number,
