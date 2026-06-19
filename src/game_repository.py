@@ -19,6 +19,8 @@ class StoredGame:
     white: str
     winner: str | None
     move_count: int
+    strategy: str | None
+    enclosure: str | None
     raw_kif: str
 
 
@@ -84,6 +86,8 @@ class GameRepository:
         game: GameRecord,
         positions: list[PositionRecord],
         *,
+        strategy: str | None = None,
+        enclosure: str | None = None,
         skip_duplicates: bool = True,
     ) -> int:
         if skip_duplicates:
@@ -95,9 +99,10 @@ class GameRepository:
             cursor = self.connection.execute(
                 """
                 INSERT INTO games (
-                    played_at, black, white, winner, move_count, raw_kif
+                    played_at, black, white, winner, move_count,
+                    strategy, enclosure, raw_kif
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     game.played_at,
@@ -105,6 +110,8 @@ class GameRepository:
                     game.white,
                     game.winner,
                     game.move_count,
+                    strategy,
+                    enclosure,
                     game.raw_kif,
                 ),
             )
@@ -145,7 +152,9 @@ class GameRepository:
     def get_game(self, game_id: int) -> StoredGame | None:
         row = self.connection.execute(
             """
-            SELECT id, played_at, black, white, winner, move_count, raw_kif
+            SELECT
+                id, played_at, black, white, winner, move_count,
+                strategy, enclosure, raw_kif
             FROM games
             WHERE id = ?
             """,
@@ -160,13 +169,17 @@ class GameRepository:
             white=row["white"],
             winner=row["winner"],
             move_count=int(row["move_count"]),
+            strategy=row["strategy"],
+            enclosure=row["enclosure"],
             raw_kif=row["raw_kif"],
         )
 
     def list_games(self) -> list[StoredGame]:
         rows = self.connection.execute(
             """
-            SELECT id, played_at, black, white, winner, move_count, raw_kif
+            SELECT
+                id, played_at, black, white, winner, move_count,
+                strategy, enclosure, raw_kif
             FROM games
             ORDER BY id DESC
             """
@@ -179,6 +192,8 @@ class GameRepository:
                 white=row["white"],
                 winner=row["winner"],
                 move_count=int(row["move_count"]),
+                strategy=row["strategy"],
+                enclosure=row["enclosure"],
                 raw_kif=row["raw_kif"],
             )
             for row in rows

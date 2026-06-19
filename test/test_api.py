@@ -23,6 +23,19 @@ KIF_WITH_ANALYSIS = """\
 まで2手で後手の勝ち
 """
 
+SHIKENBISHA_KIF = """\
+開始日時：2024/03/01 10:00:00
+手合割：平手
+先手：振飛車太郎
+後手：居飛車花子
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+   3 ６八飛(28)    ( 0:01/00:00:02)
+   4 投了
+まで3手で先手の勝ち
+"""
+
 
 class TestShogiDbApi(unittest.TestCase):
     def setUp(self):
@@ -40,7 +53,14 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["game"]["white"], "棋譜花子")
         self.assertEqual(response["game"]["winner"], "white")
         self.assertEqual(response["game"]["move_count"], 2)
+        self.assertIsNone(response["game"]["strategy"])
+        self.assertIsNone(response["game"]["enclosure"])
         self.assertEqual(response["positions_count"], 3)
+
+    def test_import_game_detects_strategy(self):
+        response = self.api.import_game(SHIKENBISHA_KIF)
+
+        self.assertEqual(response["game"]["strategy"], "四間飛車")
 
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)
@@ -49,6 +69,8 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(len(response["games"]), 1)
         self.assertEqual(response["games"][0]["black"], "解析太郎")
+        self.assertIn("strategy", response["games"][0])
+        self.assertIn("enclosure", response["games"][0])
         self.assertNotIn("raw_kif", response["games"][0])
 
     def test_get_positions(self):
@@ -57,6 +79,7 @@ class TestShogiDbApi(unittest.TestCase):
         response = self.api.get_positions(game_id)
 
         self.assertEqual(response["game"]["id"], game_id)
+        self.assertIn("strategy", response["game"])
         self.assertEqual(len(response["positions"]), 3)
         self.assertEqual(response["positions"][0]["move"], None)
         self.assertEqual(response["positions"][1]["move"], "7g7f")

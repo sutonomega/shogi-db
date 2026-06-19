@@ -49,7 +49,19 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(stored.white, "棋譜花子")
         self.assertEqual(stored.winner, "black")
         self.assertEqual(stored.move_count, 3)
+        self.assertIsNone(stored.strategy)
+        self.assertIsNone(stored.enclosure)
         self.assertEqual(stored.raw_kif, KIF_WITH_ANALYSIS)
+
+    def test_save_strategy(self):
+        game_id = self.repository.save_game(
+            self.game,
+            self.positions,
+            strategy="四間飛車",
+        )
+        stored = self.repository.get_game(game_id)
+
+        self.assertEqual(stored.strategy, "四間飛車")
 
     def test_save_positions_with_sfen_and_analysis(self):
         game_id = self.repository.save_game(self.game, self.positions)
@@ -77,9 +89,14 @@ class TestGameRepository(unittest.TestCase):
 
     def test_duplicate_raw_kif_returns_existing_game_id(self):
         first_id = self.repository.save_game(self.game, self.positions)
-        second_id = self.repository.save_game(self.game, self.positions)
+        second_id = self.repository.save_game(
+            self.game,
+            self.positions,
+            strategy="四間飛車",
+        )
 
         self.assertEqual(second_id, first_id)
+        self.assertIsNone(self.repository.get_game(first_id).strategy)
         count = self.repository.connection.execute(
             "SELECT COUNT(*) AS count FROM games"
         ).fetchone()["count"]
