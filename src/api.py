@@ -7,6 +7,7 @@ import json
 from .game_repository import GameRepository, StoredGame, StoredPosition
 from .kif_parser import KifParser
 from .sfen_generator import SfenGenerator
+from .strategy_detector import StrategyDetector
 
 
 class ApiError(ValueError):
@@ -27,7 +28,8 @@ class ShogiDbApi:
 
         game = KifParser().parse(kif_text)
         positions = SfenGenerator().generate(game)
-        game_id = self.repository.save_game(game, positions)
+        strategy = StrategyDetector().detect(positions)
+        game_id = self.repository.save_game(game, positions, strategy=strategy)
 
         return {
             "game": self._game_to_dict(self.repository.get_game(game_id)),
@@ -70,6 +72,8 @@ class ShogiDbApi:
             "white": game.white,
             "winner": game.winner,
             "move_count": game.move_count,
+            "strategy": game.strategy,
+            "enclosure": game.enclosure,
         }
 
     def _position_to_dict(self, position: StoredPosition) -> dict:
