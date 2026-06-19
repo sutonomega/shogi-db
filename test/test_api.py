@@ -36,6 +36,29 @@ SHIKENBISHA_KIF = """\
 まで3手で先手の勝ち
 """
 
+MINO_KIF = """\
+開始日時：2024/03/02 10:00:00
+手合割：平手
+先手：囲い太郎
+後手：居飛車花子
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+   3 ６八飛(28)    ( 0:01/00:00:02)
+   4 ８四歩(83)    ( 0:01/00:00:02)
+   5 ４八玉(59)    ( 0:01/00:00:03)
+   6 ８五歩(84)    ( 0:01/00:00:03)
+   7 ３八玉(48)    ( 0:01/00:00:04)
+   8 ６二銀(71)    ( 0:01/00:00:04)
+   9 ２八玉(38)    ( 0:01/00:00:05)
+  10 ４二玉(51)    ( 0:01/00:00:05)
+  11 ３八銀(39)    ( 0:01/00:00:06)
+  12 ３二玉(42)    ( 0:01/00:00:06)
+  13 ５八金左(69)  ( 0:01/00:00:07)
+  14 投了
+まで13手で先手の勝ち
+"""
+
 
 class TestShogiDbApi(unittest.TestCase):
     def setUp(self):
@@ -61,6 +84,11 @@ class TestShogiDbApi(unittest.TestCase):
         response = self.api.import_game(SHIKENBISHA_KIF)
 
         self.assertEqual(response["game"]["strategy"], "四間飛車")
+
+    def test_import_game_detects_enclosure(self):
+        response = self.api.import_game(MINO_KIF)
+
+        self.assertEqual(response["game"]["enclosure"], "美濃囲い")
 
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)
