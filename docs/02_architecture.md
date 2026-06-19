@@ -39,9 +39,9 @@
 ### Backend
 
 - **フレームワーク**: Python + FastAPI
-- **KIF パーサー**: 独自実装（`python-shogi` ライブラリを補助的に利用）
-- **SFEN 生成**: KIF を手番ごとに再生して SFEN を生成
-- **DB アクセス**: SQLAlchemy + SQLite
+- **KIF パーサー**: 独自実装
+- **SFEN 生成**: KIF 手を USI に変換し、盤面を手番ごとに再生して SFEN を生成
+- **DB アクセス**: MVP は `sqlite3` + SQLite。必要に応じて SQLAlchemy へ移行
 
 ### Database
 
@@ -59,11 +59,23 @@ KIF ファイル
     ↓ POST /api/games/import
 KIF パーサー（ヘッダー解析・指し手解析・評価値抽出）
     ↓
-局面再生 → SFEN 生成（手番ごと）
+KIF 手 → USI → 局面再生 → SFEN 生成（手番ごと）
     ↓
 games テーブルへ保存
 positions テーブルへ保存（全手番分）
 ```
+
+### 定跡 DB 連携
+
+```
+games / positions
+    ↓
+SFEN ごとに指し手を集計
+    ↓
+openings(source='self') へ保存
+```
+
+外部定跡 DB は、やねうら王 DB などを HiraganaSuisho / BookConv などで SFEN 列へ変換できる場合に `openings(source='yaneou')` などとして取り込む。
 
 ### 棋譜ビューア表示
 

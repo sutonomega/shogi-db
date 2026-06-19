@@ -73,21 +73,37 @@ KIF を大量に取り込んで集計した局面ごとの指し手統計。
 ```sql
 CREATE TABLE openings (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    source    TEXT NOT NULL DEFAULT 'self', -- self / yaneou / professional / floodgate など
     sfen      TEXT NOT NULL,   -- 局面の SFEN（持ち駒・手番を含む）
     move      TEXT NOT NULL,   -- 指し手（USI 形式）
     count     INTEGER NOT NULL DEFAULT 0,  -- 実戦での出現回数
     avg_eval  INTEGER,         -- 平均評価値（先手視点 cp）
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(sfen, move)
+    UNIQUE(source, sfen, move)
 );
 
 CREATE INDEX idx_openings_sfen ON openings(sfen);
+CREATE INDEX idx_openings_source_sfen ON openings(source, sfen);
 ```
+
+### `source`
+
+`openings.source` は定跡データの由来を表す。
+
+| source | 内容 |
+|---|---|
+| `self` | 自分の実戦棋譜から集計した定跡 |
+| `yaneou` | やねうら王定跡 DB など外部定跡 |
+| `professional` | プロ棋譜由来の統計 |
+| `floodgate` | Floodgate など公開対局由来の統計 |
+
+MVP では `self` のみを扱い、外部 source は Phase 3 以降で取り込む。
 
 ### 保存例
 
 ```json
 {
+  "source": "self",
   "sfen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
   "move": "7g7f",
   "count": 120,
@@ -102,10 +118,12 @@ games / positions テーブルの蓄積データ
     ↓
 sfen ごとに指し手を集計
     ↓
-count・avg_eval を更新（UPSERT）
+source='self' の count・avg_eval を更新（UPSERT）
     ↓
 openings テーブルへ反映
 ```
+
+外部定跡 DB は、変換ツールを利用して SFEN と指し手の列へ変換できる場合に `source` を分けて `openings` へ取り込む。
 
 ---
 
