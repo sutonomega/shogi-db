@@ -11,6 +11,8 @@ class TestFrontendFiles(unittest.TestCase):
 
         self.assertIn('id="gameRows"', content)
         self.assertIn('id="searchInput"', content)
+        self.assertIn('id="strategyStatsPanel"', content)
+        self.assertIn('id="strategyStatsList"', content)
         self.assertIn('id="viewerView"', content)
         self.assertIn('id="boardGrid"', content)
         self.assertIn('id="evalGraph"', content)
@@ -25,6 +27,9 @@ class TestFrontendFiles(unittest.TestCase):
         content = (ROOT / "frontend" / "assets" / "app.js").read_text(encoding="utf-8")
 
         self.assertIn('fetch("/api/games")', content)
+        self.assertIn('fetch("/api/stats/strategies")', content)
+        self.assertIn("renderStrategyStats", content)
+        self.assertIn("formatPercent", content)
         self.assertIn("parseSfen", content)
         self.assertIn("renderBoard", content)
         self.assertIn("renderEvalGraph", content)
@@ -39,6 +44,8 @@ class TestFrontendFiles(unittest.TestCase):
         content = (ROOT / "frontend" / "assets" / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn(".game-table", content)
+        self.assertIn(".stats-panel", content)
+        self.assertIn(".stats-item", content)
         self.assertIn("table-layout: fixed", content)
         self.assertIn(".board-grid", content)
         self.assertIn(".eval-graph", content)

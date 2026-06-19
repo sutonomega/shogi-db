@@ -5,7 +5,7 @@ Application API operations for importing and reading games.
 import json
 
 from .enclosure_detector import EnclosureDetector
-from .game_repository import GameRepository, StoredGame, StoredPosition
+from .game_repository import GameRepository, StoredGame, StoredPosition, StrategyStats
 from .kif_parser import KifParser
 from .sfen_generator import SfenGenerator
 from .strategy_detector import StrategyDetector
@@ -64,6 +64,14 @@ class ShogiDbApi:
             ],
         }
 
+    def get_strategy_stats(self) -> dict:
+        return {
+            "strategies": [
+                self._strategy_stats_to_dict(stats)
+                for stats in self.repository.list_strategy_stats()
+            ]
+        }
+
     def _game_to_dict(self, game: StoredGame | None) -> dict:
         if game is None:
             raise ApiError("Saved game could not be loaded", 500)
@@ -92,4 +100,14 @@ class ShogiDbApi:
             "best_move": position.best_move,
             "pv": position.pv,
             "candidates": json.loads(position.candidates),
+        }
+
+    def _strategy_stats_to_dict(self, stats: StrategyStats) -> dict:
+        return {
+            "strategy": stats.strategy,
+            "games": stats.games,
+            "wins": stats.wins,
+            "losses": stats.losses,
+            "draws": stats.draws,
+            "win_rate": stats.win_rate,
         }

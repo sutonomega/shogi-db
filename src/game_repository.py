@@ -35,6 +35,22 @@ class StoredPosition:
     candidates: str
 
 
+@dataclass
+class StrategyStats:
+    strategy: str
+    games: int
+    wins: int
+    losses: int
+    draws: int
+
+    @property
+    def win_rate(self) -> float | None:
+        decisive_games = self.wins + self.losses
+        if decisive_games == 0:
+            return None
+        return self.wins / decisive_games
+
+
 class GameRepository:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
@@ -220,6 +236,32 @@ class GameRepository:
                 best_move=row["best_move"],
                 pv=row["pv"],
                 candidates=row["candidates"],
+            )
+            for row in rows
+        ]
+
+    def list_strategy_stats(self) -> list[StrategyStats]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                strategy,
+                COUNT(*) AS games,
+                SUM(CASE WHEN winner = 'black' THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN winner = 'white' THEN 1 ELSE 0 END) AS losses,
+                SUM(CASE WHEN winner = 'draw' THEN 1 ELSE 0 END) AS draws
+            FROM games
+            WHERE strategy IS NOT NULL
+            GROUP BY strategy
+            ORDER BY games DESC, strategy ASC
+            """
+        ).fetchall()
+        return [
+            StrategyStats(
+                strategy=row["strategy"],
+                games=int(row["games"]),
+                wins=int(row["wins"]),
+                losses=int(row["losses"]),
+                draws=int(row["draws"]),
             )
             for row in rows
         ]

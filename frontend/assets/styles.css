@@ -145,6 +145,60 @@ input {
   background: #fff5f5;
 }
 
+.stats-panel {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.stats-panel h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.stats-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.stats-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.stats-item strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-item span {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.stats-item small,
+.stats-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stats-empty {
+  margin: 0;
+}
+
 .game-table-shell {
   overflow-x: auto;
   border: 1px solid var(--line);
