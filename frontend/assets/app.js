@@ -44,6 +44,7 @@ const firstMoveButton = document.querySelector("#firstMoveButton");
 const prevMoveButton = document.querySelector("#prevMoveButton");
 const nextMoveButton = document.querySelector("#nextMoveButton");
 const lastMoveButton = document.querySelector("#lastMoveButton");
+const moveSlider = document.querySelector("#moveSlider");
 const viewerTitle = document.querySelector("#viewerTitle");
 const positionMoveNumber = document.querySelector("#positionMoveNumber");
 const positionMove = document.querySelector("#positionMove");
@@ -222,7 +223,20 @@ function parseHands(handsPart) {
 
 function renderBoard() {
   const position = state.positions[state.currentMove];
-  if (!position) return;
+  if (!position) {
+    boardGrid.textContent = "";
+    blackHand.textContent = "なし";
+    whiteHand.textContent = "なし";
+    moveCounter.textContent = "0 / 0";
+    viewerTitle.textContent = "対局";
+    positionMoveNumber.textContent = "0手目";
+    positionMove.textContent = "開始局面";
+    positionEval.textContent = "なし";
+    positionSfen.textContent = "";
+    updateMoveControls();
+    renderEvalGraph();
+    return;
+  }
 
   const parsed = parseSfen(position.sfen);
   boardGrid.textContent = "";
@@ -251,11 +265,18 @@ function renderBoard() {
   positionEval.textContent = formatEvalWithDelta(state.currentMove);
   positionSfen.textContent = position.sfen;
   renderEvalGraph();
+  updateMoveControls();
+}
 
+function updateMoveControls() {
+  const max = Math.max(state.positions.length - 1, 0);
   firstMoveButton.disabled = state.currentMove === 0;
   prevMoveButton.disabled = state.currentMove === 0;
-  nextMoveButton.disabled = state.currentMove >= state.positions.length - 1;
-  lastMoveButton.disabled = state.currentMove >= state.positions.length - 1;
+  nextMoveButton.disabled = state.currentMove >= max;
+  lastMoveButton.disabled = state.currentMove >= max;
+  moveSlider.max = `${max}`;
+  moveSlider.value = `${state.currentMove}`;
+  moveSlider.disabled = max === 0;
 }
 
 function pieceLabel(piece) {
@@ -381,10 +402,20 @@ function renderEvalGraph() {
       cy: yFor(point.eval).toFixed(1),
       r: point.index === state.currentMove ? 4.8 : 3.2,
       class: point.index === state.currentMove ? "eval-point current" : "eval-point",
+      "data-move-index": point.index,
+      role: "button",
+      tabindex: "0",
     });
     const title = svgElement("title");
     title.textContent = `${point.moveNumber}手目 ${formatEval(point.eval)}`;
     circle.appendChild(title);
+    circle.addEventListener("click", () => setCurrentMove(point.index));
+    circle.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setCurrentMove(point.index);
+      }
+    });
     evalGraph.appendChild(circle);
   }
 }
@@ -479,6 +510,7 @@ firstMoveButton.addEventListener("click", () => setCurrentMove(0));
 prevMoveButton.addEventListener("click", () => setCurrentMove(state.currentMove - 1));
 nextMoveButton.addEventListener("click", () => setCurrentMove(state.currentMove + 1));
 lastMoveButton.addEventListener("click", () => setCurrentMove(state.positions.length - 1));
+moveSlider.addEventListener("input", (event) => setCurrentMove(Number(event.target.value)));
 
 const gameId = gameIdFromPath();
 if (gameId) {

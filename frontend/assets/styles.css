@@ -318,6 +318,16 @@ input {
   text-align: center;
 }
 
+.move-slider {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.move-slider:disabled {
+  opacity: 0.45;
+}
+
 .position-panel {
   padding: 18px;
 }
@@ -398,12 +408,19 @@ input {
   fill: #1f6f8b;
   stroke: var(--surface);
   stroke-width: 1.5;
+  cursor: pointer;
 }
 
 .eval-point.current {
   fill: var(--accent);
   stroke: #163f2d;
   stroke-width: 2;
+}
+
+.eval-point:focus {
+  outline: none;
+  stroke: #163f2d;
+  stroke-width: 3;
 }
 
 .eval-axis-label {
