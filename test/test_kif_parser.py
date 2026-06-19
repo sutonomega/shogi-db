@@ -2,15 +2,12 @@
 KifParser のユニットテスト
 
 実行:
-    python -m unittest backend/parser/test_kif_parser.py -v
+    python3 -m unittest discover -s test -v
 """
 
-import sys
-import os
 import unittest
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from backend.parser.kif_parser import KifParser, Candidate
+from src.kif_parser import KifParser
 
 
 # ---------------------------------------------------------------------------
