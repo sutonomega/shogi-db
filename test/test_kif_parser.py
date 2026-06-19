@@ -63,6 +63,46 @@ KIF_WITH_TSUMI = """\
 まで77手で先手の勝ち
 """
 
+KIF_WITH_INLINE_ANALYSIS = """\
+開始日時：2024/06/01 10:00:00
+手合割：平手
+先手：水匠A
+後手：水匠B
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+**解析 0  時間 00:03.8 深さ 31/36 ノード数 28771399 評価値 101 読み筋 ▲７六歩(77)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+**解析 0  時間 00:03.8 深さ 30/35 ノード数 12345 評価値 -32 読み筋 △３四歩(33) ▲２六歩(27)
+   3 投了
+まで2手で後手の勝ち
+"""
+
+KIF_WITH_ANALYSIS_BEFORE_MOVES = """\
+開始日時：2024/06/03 10:00:00
+手合割：平手
+先手：前置きA
+後手：前置きB
+手数----指手---------消費時間--
+**解析 0  時間 00:03.8 深さ 31/36 ノード数 28771399 評価値 101 読み筋 ▲７六歩(77)
+   1 ７六歩(77)    ( 0:01/00:00:01)
+**解析 0  時間 00:03.8 深さ 30/35 ノード数 12345 評価値 -詰 5 読み筋 △３四歩(33)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+   3 投了
+"""
+
+KIF_WITH_INLINE_TSUMI_ANALYSIS = """\
+開始日時：2024/06/02 10:00:00
+手合割：平手
+先手：詰みA
+後手：詰みB
+手数----指手---------消費時間--
+   1 ７六歩(77)
+**解析 0  時間 00:00.0 深さ 6/3 ノード数 806 評価値 +詰 2 読み筋 △１四歩(13) ▲２二馬(31)
+   2 ３四歩(33)
+**解析 0  時間 00:00.0 深さ 6/3 ノード数 806 評価値 -詰 5 読み筋 ▲２六歩(27)
+   3 投了
+"""
+
 KIF_DRAW = """\
 開始日時：2024/04/01 12:00:00
 手合割：平手
@@ -228,6 +268,48 @@ class TestWithAnalysis(unittest.TestCase):
         self.assertEqual(self.record.winner, "black")
 
 
+class TestWithInlineAnalysis(unittest.TestCase):
+    def setUp(self):
+        self.record = KifParser().parse(KIF_WITH_INLINE_ANALYSIS)
+
+    def test_eval_from_analysis_header(self):
+        self.assertEqual(self.record.moves[0].eval, 101)
+        self.assertEqual(self.record.moves[1].eval, -32)
+
+    def test_pv_from_analysis_header(self):
+        self.assertEqual(self.record.moves[0].pv, "▲７六歩(77)")
+        self.assertEqual(
+            self.record.moves[1].pv,
+            "△３四歩(33) ▲２六歩(27)",
+        )
+
+    def test_best_move_keeps_kif_notation(self):
+        self.assertEqual(self.record.moves[0].best_move, "▲７六歩(77)")
+        self.assertEqual(self.record.moves[1].best_move, "△３四歩(33)")
+
+    def test_no_candidates(self):
+        self.assertEqual(self.record.moves[0].candidates, [])
+
+
+class TestWithAnalysisBeforeMoves(unittest.TestCase):
+    def setUp(self):
+        self.record = KifParser().parse(KIF_WITH_ANALYSIS_BEFORE_MOVES)
+
+    def test_eval_is_attached_to_next_move(self):
+        self.assertEqual(self.record.moves[0].move_kif, "７六歩(77)")
+        self.assertEqual(self.record.moves[0].eval, 101)
+
+    def test_inline_tsumi_is_attached_to_next_move(self):
+        self.assertEqual(self.record.moves[1].move_kif, "３四歩(33)")
+        self.assertEqual(self.record.moves[1].eval, -100_000)
+
+    def test_pv_and_best_move_are_attached_to_next_move(self):
+        self.assertEqual(self.record.moves[0].pv, "▲７六歩(77)")
+        self.assertEqual(self.record.moves[0].best_move, "▲７六歩(77)")
+        self.assertEqual(self.record.moves[1].pv, "△３四歩(33)")
+        self.assertEqual(self.record.moves[1].best_move, "△３四歩(33)")
+
+
 class TestTsumi(unittest.TestCase):
     def test_positive_tsumi(self):
         record = KifParser().parse(KIF_WITH_TSUMI)
@@ -246,6 +328,12 @@ class TestTsumi(unittest.TestCase):
 """
         record = KifParser().parse(kif)
         self.assertEqual(record.moves[0].eval, -100_000)
+
+    def test_inline_positive_and_negative_tsumi(self):
+        record = KifParser().parse(KIF_WITH_INLINE_TSUMI_ANALYSIS)
+
+        self.assertEqual(record.moves[0].eval, 100_000)
+        self.assertEqual(record.moves[1].eval, -100_000)
 
 
 class TestRawKif(unittest.TestCase):

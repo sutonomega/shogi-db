@@ -93,6 +93,10 @@ class KifParser:
 
     # 水匠解析コメント
     _RE_ANALYSIS_HEADER = re.compile(r"^\*\*解析\s+\d+")
+    _RE_INLINE_ANALYSIS = re.compile(
+        r"評価値\s+([+\-]?\d+|[+\-]?詰\s*\d*)"
+        r"(?:\s+読み筋\s+(.+))?"
+    )
     _RE_EVAL_LINE = re.compile(
         r"^\*評価値\s+([+\-]?\d+|[+\-]?詰\s*\d*)"  # 評価値（数値 or 詰）
         r"(?:\s+読み筋\s+(.+))?"                     # 読み筋（省略可）
@@ -113,6 +117,7 @@ class KifParser:
         white = "後手"
         winner: str | None = None
         moves: list[MoveRecord] = []
+        pending_analysis: tuple[int | None, str | None, str | None, list[Candidate]] | None = None
 
         i = 0
         while i < len(lines):
@@ -153,6 +158,14 @@ class KifParser:
                 i += 1
                 continue
 
+            # --- 指し手の前にある解析行 ---
+            if self._RE_ANALYSIS_HEADER.match(line):
+                eval_val, best_move, pv, candidates, consumed = \
+                    self._parse_analysis_block(lines, i)
+                pending_analysis = (eval_val, best_move, pv, candidates)
+                i += consumed
+                continue
+
             # --- 指し手行 ---
             if m := self._RE_MOVE.match(line):
                 move_number = int(m.group(1))
@@ -164,9 +177,14 @@ class KifParser:
                     i += 1
                     continue
 
-                # 解析コメントを先読み
-                eval_val, best_move, pv, candidates, consumed = \
-                    self._parse_analysis_block(lines, i + 1)
+                if pending_analysis is not None:
+                    eval_val, best_move, pv, candidates = pending_analysis
+                    consumed = 0
+                    pending_analysis = None
+                else:
+                    # 解析コメントを先読み
+                    eval_val, best_move, pv, candidates, consumed = \
+                        self._parse_analysis_block(lines, i + 1)
 
                 moves.append(MoveRecord(
                     move_number=move_number,
@@ -219,6 +237,11 @@ class KifParser:
         if i >= len(lines) or not self._RE_ANALYSIS_HEADER.match(lines[i]):
             return None, None, None, [], 0
 
+        if m := self._RE_INLINE_ANALYSIS.search(lines[i]):
+            eval_val = self._parse_eval(m.group(1))
+            if m.group(2):
+                best_move, pv = self._parse_pv(m.group(2))
+
         consumed += 1
         i += 1
 
@@ -227,11 +250,7 @@ class KifParser:
             if m := self._RE_EVAL_LINE.match(lines[i]):
                 eval_val = self._parse_eval(m.group(1))
                 if m.group(2):
-                    pv_raw = m.group(2).strip()
-                    moves_in_pv = pv_raw.split()
-                    # 最善手は読み筋の先頭
-                    best_move = moves_in_pv[0] if moves_in_pv else None
-                    pv = pv_raw
+                    best_move, pv = self._parse_pv(m.group(2))
                 consumed += 1
                 i += 1
 
@@ -252,6 +271,13 @@ class KifParser:
     # ------------------------------------------------------------------
     # ユーティリティ
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_pv(raw: str) -> tuple[str | None, str]:
+        pv = raw.strip()
+        moves_in_pv = pv.split()
+        best_move = moves_in_pv[0] if moves_in_pv else None
+        return best_move, pv
 
     @staticmethod
     def _parse_eval(raw: str) -> int:
