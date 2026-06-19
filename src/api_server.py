@@ -39,7 +39,7 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         try:
-            if path == "/" or path.startswith("/assets/"):
+            if path == "/" or path.startswith("/assets/") or self._is_frontend_route(path):
                 self._send_static(path)
                 return
 
@@ -90,7 +90,7 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _send_static(self, path: str) -> None:
-        relative_path = "index.html" if path == "/" else path.removeprefix("/")
+        relative_path = "index.html" if path == "/" or self._is_frontend_route(path) else path.removeprefix("/")
         file_path = (self.static_root / relative_path).resolve()
         static_root = self.static_root.resolve()
 
@@ -105,6 +105,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
+
+    def _is_frontend_route(self, path: str) -> bool:
+        parts = path.strip("/").split("/")
+        return len(parts) == 2 and parts[0] == "games" and parts[1].isdigit()
 
 
 def create_server(

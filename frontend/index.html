@@ -9,16 +9,17 @@
   <body>
     <main class="app-shell">
       <header class="topbar">
+        <button class="back-link" id="backButton" type="button" hidden>← 対局一覧</button>
         <div>
           <h1>shogi-db</h1>
-          <p>対局一覧</p>
+          <p id="pageSubtitle">対局一覧</p>
         </div>
         <button class="icon-button" id="refreshButton" type="button" aria-label="再読み込み" title="再読み込み">
           ↻
         </button>
       </header>
 
-      <section class="toolbar" aria-label="対局一覧の操作">
+      <section class="toolbar" id="listToolbar" aria-label="対局一覧の操作">
         <label class="search-field">
           <span>検索</span>
           <input id="searchInput" type="search" autocomplete="off" placeholder="先手・後手・勝敗" />
@@ -28,7 +29,7 @@
 
       <section class="status-panel" id="statusPanel" hidden></section>
 
-      <section class="game-table-shell" aria-label="保存済み対局">
+      <section class="game-table-shell" id="gameListView" aria-label="保存済み対局">
         <table class="game-table">
           <thead>
             <tr>
@@ -41,6 +42,49 @@
           </thead>
           <tbody id="gameRows"></tbody>
         </table>
+      </section>
+
+      <section class="viewer-shell" id="viewerView" hidden>
+        <section class="board-column" aria-label="盤面">
+          <div class="hands opponent">
+            <span>後手持ち駒</span>
+            <strong id="whiteHand">なし</strong>
+          </div>
+          <div class="board-frame">
+            <div class="file-labels" aria-hidden="true">
+              <span>９</span><span>８</span><span>７</span><span>６</span><span>５</span><span>４</span><span>３</span><span>２</span><span>１</span>
+            </div>
+            <div class="board-grid" id="boardGrid" aria-label="将棋盤"></div>
+          </div>
+          <div class="hands player">
+            <span>先手持ち駒</span>
+            <strong id="blackHand">なし</strong>
+          </div>
+          <div class="move-controls">
+            <button type="button" id="firstMoveButton" title="最初へ">|←</button>
+            <button type="button" id="prevMoveButton" title="1手戻る">←</button>
+            <span id="moveCounter">0 / 0</span>
+            <button type="button" id="nextMoveButton" title="1手進む">→</button>
+            <button type="button" id="lastMoveButton" title="最後へ">→|</button>
+          </div>
+        </section>
+        <aside class="position-panel" aria-label="局面情報">
+          <h2 id="viewerTitle">対局</h2>
+          <dl>
+            <div>
+              <dt>手番</dt>
+              <dd id="positionMoveNumber">0手目</dd>
+            </div>
+            <div>
+              <dt>指し手</dt>
+              <dd id="positionMove">開始局面</dd>
+            </div>
+            <div>
+              <dt>SFEN</dt>
+              <dd class="sfen-text" id="positionSfen"></dd>
+            </div>
+          </dl>
+        </aside>
       </section>
     </main>
     <script src="/assets/app.js" defer></script>
