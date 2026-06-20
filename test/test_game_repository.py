@@ -178,11 +178,31 @@ class TestGameRepository(unittest.TestCase):
         )
 
         self.assertEqual(second_id, first_id)
-        self.assertIsNone(self.repository.get_game(first_id).strategy)
+        self.assertEqual(self.repository.get_game(first_id).strategy, "四間飛車")
         count = self.repository.connection.execute(
             "SELECT COUNT(*) AS count FROM games"
         ).fetchone()["count"]
         self.assertEqual(count, 1)
+
+    def test_duplicate_raw_kif_replaces_existing_positions(self):
+        positions_without_eval = [
+            replace(position_record, eval=None, best_move=None, pv=None, candidates=[])
+            for position_record in self.positions
+        ]
+        game_id = self.repository.save_game(self.game, positions_without_eval)
+
+        same_id = self.repository.save_game(self.game, self.positions)
+        stored_positions = self.repository.list_positions(game_id)
+
+        self.assertEqual(same_id, game_id)
+        self.assertEqual(len(stored_positions), len(self.positions))
+        self.assertEqual(stored_positions[1].eval, 64)
+        self.assertEqual(stored_positions[1].best_move, "7g7f")
+        count = self.repository.connection.execute(
+            "SELECT COUNT(*) AS count FROM positions WHERE game_id = ?",
+            (game_id,),
+        ).fetchone()["count"]
+        self.assertEqual(count, len(self.positions))
 
 
 if __name__ == "__main__":
