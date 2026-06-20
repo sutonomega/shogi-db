@@ -4,6 +4,9 @@ const state = {
   enclosureStats: [],
   blunders: [],
   positions: [],
+  moveFrequencies: [],
+  moveFrequencyTotal: 0,
+  moveFrequencyRequestId: 0,
   game: null,
   query: "",
   currentMove: 0,
@@ -74,6 +77,8 @@ const positionSfen = document.querySelector("#positionSfen");
 const evalGraph = document.querySelector("#evalGraph");
 const evalSummary = document.querySelector("#evalSummary");
 const evalGraphStatus = document.querySelector("#evalGraphStatus");
+const moveFrequencyList = document.querySelector("#moveFrequencyList");
+const moveFrequencySummary = document.querySelector("#moveFrequencySummary");
 const svgNamespace = "http://www.w3.org/2000/svg";
 const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
@@ -250,6 +255,49 @@ function renderBlunders() {
     item.appendChild(record);
 
     blunderList.appendChild(item);
+  }
+}
+
+function renderMoveFrequencies() {
+  moveFrequencyList.textContent = "";
+  moveFrequencySummary.textContent = `${state.moveFrequencyTotal}回`;
+
+  if (!state.moveFrequencies.length) {
+    const empty = document.createElement("p");
+    empty.className = "stats-empty";
+    empty.textContent = "この局面の実戦手はありません";
+    moveFrequencyList.appendChild(empty);
+    return;
+  }
+
+  for (const frequency of state.moveFrequencies) {
+    const item = document.createElement("article");
+    item.className = "move-frequency-item";
+
+    const heading = document.createElement("div");
+    heading.className = "move-frequency-heading";
+
+    const move = document.createElement("strong");
+    move.textContent = frequency.move;
+    heading.appendChild(move);
+
+    const count = document.createElement("span");
+    count.textContent = `${frequency.count}回`;
+    heading.appendChild(count);
+    item.appendChild(heading);
+
+    const bar = document.createElement("div");
+    bar.className = "move-frequency-bar";
+    const fill = document.createElement("span");
+    fill.style.width = `${Math.round((frequency.ratio || 0) * 100)}%`;
+    bar.appendChild(fill);
+    item.appendChild(bar);
+
+    const details = document.createElement("small");
+    details.textContent = `割合 ${formatPercent(frequency.ratio)} / 平均評価値 ${formatEval(frequency.avg_eval)}`;
+    item.appendChild(details);
+
+    moveFrequencyList.appendChild(item);
   }
 }
 
@@ -610,6 +658,7 @@ function setCurrentMove(moveNumber) {
   const max = Math.max(state.positions.length - 1, 0);
   state.currentMove = Math.max(0, Math.min(moveNumber, max));
   renderBoard();
+  loadMoveFrequencies();
 }
 
 async function loadGames() {
@@ -678,13 +727,51 @@ async function loadViewer(gameId) {
     state.game = payload.game;
     state.positions = Array.isArray(payload.positions) ? payload.positions : [];
     state.currentMove = 0;
+    state.moveFrequencies = [];
+    state.moveFrequencyTotal = 0;
     setStatus("");
     renderBoard();
+    loadMoveFrequencies();
   } catch (error) {
     state.game = null;
     state.positions = [];
+    state.moveFrequencies = [];
+    state.moveFrequencyTotal = 0;
     setStatus(`局面データを取得できませんでした: ${error.message}`, "error");
     renderBoard();
+    renderMoveFrequencies();
+  }
+}
+
+async function loadMoveFrequencies() {
+  const position = state.positions[state.currentMove];
+  const requestId = state.moveFrequencyRequestId + 1;
+  state.moveFrequencyRequestId = requestId;
+
+  if (!position?.sfen) {
+    state.moveFrequencies = [];
+    state.moveFrequencyTotal = 0;
+    renderMoveFrequencies();
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/positions?sfen=${encodeURIComponent(position.sfen)}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (requestId !== state.moveFrequencyRequestId) return;
+    state.moveFrequencies = Array.isArray(payload.moves) ? payload.moves : [];
+    state.moveFrequencyTotal = Number.isFinite(payload.total) ? payload.total : 0;
+  } catch (error) {
+    if (requestId !== state.moveFrequencyRequestId) return;
+    state.moveFrequencies = [];
+    state.moveFrequencyTotal = 0;
+  } finally {
+    if (requestId === state.moveFrequencyRequestId) {
+      renderMoveFrequencies();
+    }
   }
 }
 

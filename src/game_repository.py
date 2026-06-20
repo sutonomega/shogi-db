@@ -89,6 +89,13 @@ class OpeningAggregate:
     avg_eval: int | None
 
 
+@dataclass
+class MoveFrequency:
+    move: str
+    count: int
+    avg_eval: int | None
+
+
 class GameRepository:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
@@ -485,6 +492,33 @@ class GameRepository:
             OpeningAggregate(
                 source=row["source"],
                 sfen=row["sfen"],
+                move=row["move"],
+                count=int(row["count"]),
+                avg_eval=int(row["avg_eval"]) if row["avg_eval"] is not None else None,
+            )
+            for row in rows
+        ]
+
+    def list_move_frequencies(self, sfen: str) -> list[MoveFrequency]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                current.move AS move,
+                COUNT(*) AS count,
+                CAST(ROUND(AVG(current.eval)) AS INTEGER) AS avg_eval
+            FROM positions AS current
+            JOIN positions AS previous
+                ON previous.game_id = current.game_id
+                AND previous.move_number = current.move_number - 1
+            WHERE previous.sfen = ?
+                AND current.move IS NOT NULL
+            GROUP BY current.move
+            ORDER BY count DESC, current.move ASC
+            """,
+            (sfen,),
+        ).fetchall()
+        return [
+            MoveFrequency(
                 move=row["move"],
                 count=int(row["count"]),
                 avg_eval=int(row["avg_eval"]) if row["avg_eval"] is not None else None,

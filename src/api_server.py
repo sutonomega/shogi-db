@@ -11,7 +11,7 @@ import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .api import ApiError, ShogiDbApi
 from .kif_encoding import KifEncodingError
@@ -55,7 +55,8 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"error": str(exc)}, 500)
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
 
         try:
             if path == "/" or path.startswith("/assets/") or self._is_frontend_route(path):
@@ -76,6 +77,12 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
 
             if path == "/api/stats/blunders":
                 self._send_json(self.api.get_blunders(), 200)
+                return
+
+            if path == "/api/positions":
+                query = parse_qs(parsed_url.query)
+                sfen = query.get("sfen", [""])[0]
+                self._send_json(self.api.get_position_frequency(sfen), 200)
                 return
 
             parts = path.strip("/").split("/")
