@@ -2,6 +2,7 @@ const state = {
   games: [],
   strategyStats: [],
   enclosureStats: [],
+  blunders: [],
   positions: [],
   game: null,
   query: "",
@@ -36,6 +37,9 @@ const strategyStatsSummary = document.querySelector("#strategyStatsSummary");
 const enclosureStatsPanel = document.querySelector("#enclosureStatsPanel");
 const enclosureStatsList = document.querySelector("#enclosureStatsList");
 const enclosureStatsSummary = document.querySelector("#enclosureStatsSummary");
+const blunderPanel = document.querySelector("#blunderPanel");
+const blunderList = document.querySelector("#blunderList");
+const blunderSummary = document.querySelector("#blunderSummary");
 const summaryText = document.querySelector("#summaryText");
 const searchInput = document.querySelector("#searchInput");
 const refreshButton = document.querySelector("#refreshButton");
@@ -116,6 +120,7 @@ function showListView() {
   listToolbar.hidden = false;
   strategyStatsPanel.hidden = false;
   enclosureStatsPanel.hidden = false;
+  blunderPanel.hidden = false;
   gameListView.hidden = false;
   viewerView.hidden = true;
   backButton.hidden = true;
@@ -127,6 +132,7 @@ function showViewerView() {
   listToolbar.hidden = true;
   strategyStatsPanel.hidden = true;
   enclosureStatsPanel.hidden = true;
+  blunderPanel.hidden = true;
   gameListView.hidden = true;
   viewerView.hidden = false;
   backButton.hidden = false;
@@ -195,6 +201,38 @@ function renderEnclosureStats() {
     labelKey: "enclosure",
     emptyText: "囲いデータはありません",
   });
+}
+
+function renderBlunders() {
+  blunderList.textContent = "";
+  blunderSummary.textContent = `${state.blunders.length}件`;
+
+  if (!state.blunders.length) {
+    const empty = document.createElement("p");
+    empty.className = "stats-empty";
+    empty.textContent = "評価値急落データはありません";
+    blunderList.appendChild(empty);
+    return;
+  }
+
+  for (const blunder of state.blunders) {
+    const item = document.createElement("article");
+    item.className = "stats-item";
+
+    const name = document.createElement("strong");
+    name.textContent = `${blunder.move_number}手目 ${blunder.move}`;
+    item.appendChild(name);
+
+    const details = document.createElement("span");
+    details.textContent = `評価値 ${formatEval(blunder.eval_before)} → ${formatEval(blunder.eval_after)}`;
+    item.appendChild(details);
+
+    const record = document.createElement("small");
+    record.textContent = `${blunder.black} vs ${blunder.white} / ${blunder.eval_delta}`;
+    item.appendChild(record);
+
+    blunderList.appendChild(item);
+  }
 }
 
 function renderStatsList({ stats, listElement, summaryElement, labelKey, emptyText }) {
@@ -525,10 +563,11 @@ async function loadGames() {
   showListView();
   setStatus("読み込み中");
   try {
-    const [gamesResponse, strategyStatsResponse, enclosureStatsResponse] = await Promise.all([
+    const [gamesResponse, strategyStatsResponse, enclosureStatsResponse, blundersResponse] = await Promise.all([
       fetch("/api/games"),
       fetch("/api/stats/strategies"),
       fetch("/api/stats/enclosures"),
+      fetch("/api/stats/blunders"),
     ]);
     if (!gamesResponse.ok) {
       throw new Error(`HTTP ${gamesResponse.status}`);
@@ -539,23 +578,31 @@ async function loadGames() {
     if (!enclosureStatsResponse.ok) {
       throw new Error(`HTTP ${enclosureStatsResponse.status}`);
     }
+    if (!blundersResponse.ok) {
+      throw new Error(`HTTP ${blundersResponse.status}`);
+    }
     const payload = await gamesResponse.json();
     const strategyStatsPayload = await strategyStatsResponse.json();
     const enclosureStatsPayload = await enclosureStatsResponse.json();
+    const blundersPayload = await blundersResponse.json();
     state.games = Array.isArray(payload.games) ? payload.games : [];
     state.strategyStats = Array.isArray(strategyStatsPayload.strategies) ? strategyStatsPayload.strategies : [];
     state.enclosureStats = Array.isArray(enclosureStatsPayload.enclosures) ? enclosureStatsPayload.enclosures : [];
+    state.blunders = Array.isArray(blundersPayload.blunders) ? blundersPayload.blunders : [];
     setStatus("");
     renderStrategyStats();
     renderEnclosureStats();
+    renderBlunders();
     renderList();
   } catch (error) {
     state.games = [];
     state.strategyStats = [];
     state.enclosureStats = [];
+    state.blunders = [];
     setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
     renderStrategyStats();
     renderEnclosureStats();
+    renderBlunders();
     renderList();
   }
 }

@@ -59,6 +59,25 @@ MINO_KIF = """\
 まで13手で先手の勝ち
 """
 
+KIF_WITH_BLUNDER = """\
+開始日時：2024/03/03 10:00:00
+手合割：平手
+先手：悪手太郎
+後手：悪手花子
+手数----指手---------消費時間--
+   1 ７六歩(77)
+**解析 0
+*評価値 +100  読み筋 7g7f 3c3d
+   2 ３四歩(33)
+**解析 0
+*評価値 +80  読み筋 3c3d 2g2f
+   3 ２六歩(27)
+**解析 0
+*評価値 -120  読み筋 2g2f 8c8d
+   4 投了
+まで3手で先手の勝ち
+"""
+
 
 class TestShogiDbApi(unittest.TestCase):
     def setUp(self):
@@ -113,6 +132,18 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["enclosures"][0]["losses"], 0)
         self.assertEqual(response["enclosures"][0]["draws"], 0)
         self.assertEqual(response["enclosures"][0]["win_rate"], 1.0)
+
+    def test_get_blunders(self):
+        self.api.import_game(KIF_WITH_BLUNDER)
+
+        response = self.api.get_blunders()
+
+        self.assertEqual(response["blunders"][0]["move_number"], 3)
+        self.assertEqual(response["blunders"][0]["move"], "2g2f")
+        self.assertEqual(response["blunders"][0]["eval_before"], 80)
+        self.assertEqual(response["blunders"][0]["eval_after"], -120)
+        self.assertEqual(response["blunders"][0]["eval_delta"], -200)
+        self.assertEqual(response["blunders"][0]["loss"], 200)
 
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)

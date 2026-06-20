@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from src.game_repository import GameRepository
 from src.kif_parser import KifParser
-from src.sfen_generator import SfenGenerator
+from src.sfen_generator import PositionRecord, SfenGenerator
 
 
 KIF_WITH_ANALYSIS = """\
@@ -28,6 +28,18 @@ KIF_WITH_ANALYSIS = """\
    4 投了
 まで3手で先手の勝ち
 """
+
+
+def position(move_number: int, move: str | None, eval_value: int | None) -> PositionRecord:
+    return PositionRecord(
+        move_number=move_number,
+        sfen="lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+        move_usi=move,
+        eval=eval_value,
+        best_move=None,
+        pv=None,
+        candidates=[],
+    )
 
 
 class TestGameRepository(unittest.TestCase):
@@ -111,6 +123,27 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(stats[0].draws, 1)
         self.assertEqual(stats[0].win_rate, 0.5)
         self.assertEqual(stats[1].enclosure, "エルモ囲い")
+
+    def test_list_blunders(self):
+        positions = [
+            position(0, None, 0),
+            position(1, "7g7f", 100),
+            position(2, "3c3d", 300),
+            position(3, "2g2f", 50),
+        ]
+        self.repository.save_game(self.game, positions)
+
+        blunders = self.repository.list_blunders()
+
+        self.assertEqual(len(blunders), 2)
+        self.assertEqual(blunders[0].move_number, 3)
+        self.assertEqual(blunders[0].move, "2g2f")
+        self.assertEqual(blunders[0].eval_before, 300)
+        self.assertEqual(blunders[0].eval_after, 50)
+        self.assertEqual(blunders[0].eval_delta, -250)
+        self.assertEqual(blunders[0].loss, 250)
+        self.assertEqual(blunders[1].move_number, 2)
+        self.assertEqual(blunders[1].eval_delta, -200)
 
     def test_save_positions_with_sfen_and_analysis(self):
         game_id = self.repository.save_game(self.game, self.positions)

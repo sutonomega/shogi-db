@@ -55,6 +55,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.get_enclosure_stats(), 200)
                 return
 
+            if path == "/api/stats/blunders":
+                self._send_json(self.api.get_blunders(), 200)
+                return
+
             parts = path.strip("/").split("/")
             if (
                 len(parts) == 4
