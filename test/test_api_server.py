@@ -200,6 +200,7 @@ class TestImportGamePayload(unittest.TestCase):
         self.assertTrue(is_import_post_path("/api/games/import"))
         self.assertTrue(is_import_post_path("/api/games/import-directory"))
         self.assertTrue(is_import_post_path("/api/openings/rebuild"))
+        self.assertTrue(is_import_post_path("/api/positions/123/analyze"))
         self.assertTrue(
             is_import_post_path("/api/games/import-directory/jobs/job-id/cancel")
         )

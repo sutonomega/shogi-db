@@ -133,11 +133,11 @@ SFEN を局面の共通キーにすることで、棋譜ビューア、戦法・
 
 ## Phase 4 — AI / エンジン活用
 
-- [ ] **水匠解析連携** (#27)
+- [x] **水匠解析連携** (#27)
   - 保存済み SFEN を水匠5へ `position sfen ...` で渡す
   - `go depth N` の USI 出力から評価値・最善手・読み筋・候補手を取得
   - `positions` に `eval` / `best_move` / `pv` / `candidates` / `analyzed_at` / `engine_name` / `engine_depth` を保存
-  - `POST /api/positions/{id}/analyze` と `POST /api/games/{id}/analyze` を検討
+  - `POST /api/positions/{id}/analyze` で局面単位の後解析を実行
   - MVP では実装せず、解析付き KIF がない棋譜を後から補完する機能として扱う
 
 - [ ] **局面解説** (#18)

@@ -3,6 +3,7 @@ Application API operations for importing and reading games.
 """
 
 import json
+import os
 from pathlib import Path
 
 from .enclosure_detector import EnclosureDetector
@@ -21,6 +22,7 @@ from .kif_parser import KifParser
 from .opening_aggregator import OpeningAggregator
 from .sfen_generator import SfenGenerator
 from .strategy_detector import StrategyDetector
+from .usi_engine import UsiEngineAnalyzer, UsiEngineError
 
 
 class ApiError(ValueError):
@@ -218,6 +220,49 @@ class ShogiDbApi:
             ],
         }
 
+    def analyze_position(
+        self,
+        position_id: int,
+        *,
+        engine_path: str | None = None,
+        engine_name: str | None = None,
+        depth: int = 18,
+    ) -> dict:
+        position = self.repository.get_position(position_id)
+        if position is None:
+            raise ApiError(f"Position not found: {position_id}", 404)
+
+        resolved_engine_path = engine_path or os.environ.get("SUISHO_ENGINE_PATH")
+        if not resolved_engine_path:
+            raise ApiError("Engine path is required", 400)
+
+        try:
+            analysis = UsiEngineAnalyzer(
+                resolved_engine_path,
+                engine_name=engine_name,
+                depth=depth,
+            ).analyze_sfen(position.sfen)
+        except UsiEngineError as exc:
+            raise ApiError(str(exc), 500) from exc
+        except OSError as exc:
+            raise ApiError(str(exc), 500) from exc
+
+        stored = self.repository.update_position_analysis(
+            position_id,
+            eval_value=analysis.eval,
+            best_move=analysis.best_move,
+            pv=analysis.pv,
+            candidates=analysis.candidates,
+            engine_name=analysis.engine_name,
+            engine_depth=analysis.engine_depth,
+        )
+        if stored is None:
+            raise ApiError(f"Position not found: {position_id}", 404)
+
+        return {
+            "position": self._position_to_dict(stored),
+        }
+
     def _game_to_dict(self, game: StoredGame | None) -> dict:
         if game is None:
             raise ApiError("Saved game could not be loaded", 500)
@@ -239,6 +284,7 @@ class ShogiDbApi:
 
     def _position_to_dict(self, position: StoredPosition) -> dict:
         return {
+            "id": position.id,
             "move_number": position.move_number,
             "sfen": position.sfen,
             "move": position.move,
@@ -246,6 +292,9 @@ class ShogiDbApi:
             "best_move": position.best_move,
             "pv": position.pv,
             "candidates": json.loads(position.candidates),
+            "analyzed_at": position.analyzed_at,
+            "engine_name": position.engine_name,
+            "engine_depth": position.engine_depth,
         }
 
     def _strategy_stats_to_dict(self, stats: StrategyStats) -> dict:

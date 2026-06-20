@@ -26,6 +26,7 @@ class StoredGame:
 
 @dataclass
 class StoredPosition:
+    id: int
     move_number: int
     sfen: str
     move: str | None
@@ -33,6 +34,9 @@ class StoredPosition:
     best_move: str | None
     pv: str | None
     candidates: str
+    analyzed_at: str | None
+    engine_name: str | None
+    engine_depth: int | None
 
 
 @dataclass
@@ -131,7 +135,10 @@ class GameRepository:
                 eval        INTEGER,
                 best_move   TEXT,
                 pv          TEXT,
-                candidates  TEXT
+                candidates  TEXT,
+                analyzed_at TEXT,
+                engine_name TEXT,
+                engine_depth INTEGER
             );
 
             CREATE INDEX IF NOT EXISTS idx_positions_game_id
@@ -158,7 +165,22 @@ class GameRepository:
                 ON openings(source, sfen);
             """
         )
+        self._migrate_schema()
         self.connection.commit()
+
+    def _migrate_schema(self) -> None:
+        columns = {
+            row["name"]
+            for row in self.connection.execute("PRAGMA table_info(positions)").fetchall()
+        }
+        migrations = {
+            "analyzed_at": "ALTER TABLE positions ADD COLUMN analyzed_at TEXT",
+            "engine_name": "ALTER TABLE positions ADD COLUMN engine_name TEXT",
+            "engine_depth": "ALTER TABLE positions ADD COLUMN engine_depth INTEGER",
+        }
+        for column, statement in migrations.items():
+            if column not in columns:
+                self.connection.execute(statement)
 
     def save_game(
         self,
@@ -344,8 +366,9 @@ class GameRepository:
         rows = self.connection.execute(
             """
             SELECT
-                move_number, sfen, move, eval,
-                best_move, pv, candidates
+                id, move_number, sfen, move, eval,
+                best_move, pv, candidates,
+                analyzed_at, engine_name, engine_depth
             FROM positions
             WHERE game_id = ?
             ORDER BY move_number
@@ -354,6 +377,7 @@ class GameRepository:
         ).fetchall()
         return [
             StoredPosition(
+                id=int(row["id"]),
                 move_number=int(row["move_number"]),
                 sfen=row["sfen"],
                 move=row["move"],
@@ -361,9 +385,76 @@ class GameRepository:
                 best_move=row["best_move"],
                 pv=row["pv"],
                 candidates=row["candidates"],
+                analyzed_at=row["analyzed_at"],
+                engine_name=row["engine_name"],
+                engine_depth=int(row["engine_depth"]) if row["engine_depth"] is not None else None,
             )
             for row in rows
         ]
+
+    def get_position(self, position_id: int) -> StoredPosition | None:
+        row = self.connection.execute(
+            """
+            SELECT
+                id, move_number, sfen, move, eval,
+                best_move, pv, candidates,
+                analyzed_at, engine_name, engine_depth
+            FROM positions
+            WHERE id = ?
+            """,
+            (position_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return StoredPosition(
+            id=int(row["id"]),
+            move_number=int(row["move_number"]),
+            sfen=row["sfen"],
+            move=row["move"],
+            eval=row["eval"],
+            best_move=row["best_move"],
+            pv=row["pv"],
+            candidates=row["candidates"],
+            analyzed_at=row["analyzed_at"],
+            engine_name=row["engine_name"],
+            engine_depth=int(row["engine_depth"]) if row["engine_depth"] is not None else None,
+        )
+
+    def update_position_analysis(
+        self,
+        position_id: int,
+        *,
+        eval_value: int | None,
+        best_move: str | None,
+        pv: str | None,
+        candidates: list[dict],
+        engine_name: str,
+        engine_depth: int,
+    ) -> StoredPosition | None:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE positions
+                SET eval = ?,
+                    best_move = ?,
+                    pv = ?,
+                    candidates = ?,
+                    analyzed_at = datetime('now'),
+                    engine_name = ?,
+                    engine_depth = ?
+                WHERE id = ?
+                """,
+                (
+                    eval_value,
+                    best_move,
+                    pv,
+                    json.dumps(candidates, ensure_ascii=False),
+                    engine_name,
+                    engine_depth,
+                    position_id,
+                ),
+            )
+        return self.get_position(position_id)
 
     def list_strategy_stats(self) -> list[StrategyStats]:
         rows = self.connection.execute(
