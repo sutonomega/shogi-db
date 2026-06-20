@@ -52,6 +52,9 @@ class TestApiServer(unittest.TestCase):
         stats_response = self._get_json("/api/stats/strategies")
         self.assertEqual(stats_response["strategies"], [])
 
+        enclosure_stats_response = self._get_json("/api/stats/enclosures")
+        self.assertEqual(enclosure_stats_response["enclosures"], [])
+
         positions_response = self._get_json("/api/games/1/positions")
         self.assertEqual(len(positions_response["positions"]), 3)
         self.assertEqual(positions_response["positions"][1]["move"], "7g7f")

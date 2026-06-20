@@ -102,6 +102,18 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(response["game"]["enclosure"], "美濃囲い")
 
+    def test_get_enclosure_stats(self):
+        self.api.import_game(MINO_KIF)
+
+        response = self.api.get_enclosure_stats()
+
+        self.assertEqual(response["enclosures"][0]["enclosure"], "美濃囲い")
+        self.assertEqual(response["enclosures"][0]["games"], 1)
+        self.assertEqual(response["enclosures"][0]["wins"], 1)
+        self.assertEqual(response["enclosures"][0]["losses"], 0)
+        self.assertEqual(response["enclosures"][0]["draws"], 0)
+        self.assertEqual(response["enclosures"][0]["win_rate"], 1.0)
+
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)
 

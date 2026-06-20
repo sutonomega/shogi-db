@@ -93,6 +93,25 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(stats[0].win_rate, 0.5)
         self.assertEqual(stats[1].strategy, "角換わり")
 
+    def test_list_enclosure_stats(self):
+        white_win_game = replace(self.game, raw_kif=f"{self.game.raw_kif}\n#2", winner="white")
+        draw_game = replace(self.game, raw_kif=f"{self.game.raw_kif}\n#3", winner="draw")
+        other_game = replace(self.game, raw_kif=f"{self.game.raw_kif}\n#4", winner="black")
+        self.repository.save_game(self.game, self.positions, enclosure="美濃囲い")
+        self.repository.save_game(white_win_game, self.positions, enclosure="美濃囲い")
+        self.repository.save_game(draw_game, self.positions, enclosure="美濃囲い")
+        self.repository.save_game(other_game, self.positions, enclosure="エルモ囲い")
+
+        stats = self.repository.list_enclosure_stats()
+
+        self.assertEqual(stats[0].enclosure, "美濃囲い")
+        self.assertEqual(stats[0].games, 3)
+        self.assertEqual(stats[0].wins, 1)
+        self.assertEqual(stats[0].losses, 1)
+        self.assertEqual(stats[0].draws, 1)
+        self.assertEqual(stats[0].win_rate, 0.5)
+        self.assertEqual(stats[1].enclosure, "エルモ囲い")
+
     def test_save_positions_with_sfen_and_analysis(self):
         game_id = self.repository.save_game(self.game, self.positions)
         stored_positions = self.repository.list_positions(game_id)

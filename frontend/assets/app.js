@@ -1,6 +1,7 @@
 const state = {
   games: [],
   strategyStats: [],
+  enclosureStats: [],
   positions: [],
   game: null,
   query: "",
@@ -32,6 +33,9 @@ const statusPanel = document.querySelector("#statusPanel");
 const strategyStatsPanel = document.querySelector("#strategyStatsPanel");
 const strategyStatsList = document.querySelector("#strategyStatsList");
 const strategyStatsSummary = document.querySelector("#strategyStatsSummary");
+const enclosureStatsPanel = document.querySelector("#enclosureStatsPanel");
+const enclosureStatsList = document.querySelector("#enclosureStatsList");
+const enclosureStatsSummary = document.querySelector("#enclosureStatsSummary");
 const summaryText = document.querySelector("#summaryText");
 const searchInput = document.querySelector("#searchInput");
 const refreshButton = document.querySelector("#refreshButton");
@@ -111,6 +115,7 @@ function showListView() {
   pageSubtitle.textContent = "対局一覧";
   listToolbar.hidden = false;
   strategyStatsPanel.hidden = false;
+  enclosureStatsPanel.hidden = false;
   gameListView.hidden = false;
   viewerView.hidden = true;
   backButton.hidden = true;
@@ -121,6 +126,7 @@ function showViewerView() {
   pageSubtitle.textContent = "棋譜ビューア";
   listToolbar.hidden = true;
   strategyStatsPanel.hidden = true;
+  enclosureStatsPanel.hidden = true;
   gameListView.hidden = true;
   viewerView.hidden = false;
   backButton.hidden = false;
@@ -172,34 +178,54 @@ function renderList() {
 }
 
 function renderStrategyStats() {
-  strategyStatsList.textContent = "";
-  strategyStatsSummary.textContent = `${state.strategyStats.length}件`;
+  renderStatsList({
+    stats: state.strategyStats,
+    listElement: strategyStatsList,
+    summaryElement: strategyStatsSummary,
+    labelKey: "strategy",
+    emptyText: "戦法データはありません",
+  });
+}
 
-  if (!state.strategyStats.length) {
+function renderEnclosureStats() {
+  renderStatsList({
+    stats: state.enclosureStats,
+    listElement: enclosureStatsList,
+    summaryElement: enclosureStatsSummary,
+    labelKey: "enclosure",
+    emptyText: "囲いデータはありません",
+  });
+}
+
+function renderStatsList({ stats, listElement, summaryElement, labelKey, emptyText }) {
+  listElement.textContent = "";
+  summaryElement.textContent = `${stats.length}件`;
+
+  if (!stats.length) {
     const empty = document.createElement("p");
     empty.className = "stats-empty";
-    empty.textContent = "戦法データはありません";
-    strategyStatsList.appendChild(empty);
+    empty.textContent = emptyText;
+    listElement.appendChild(empty);
     return;
   }
 
-  for (const stats of state.strategyStats) {
+  for (const itemStats of stats) {
     const item = document.createElement("article");
     item.className = "stats-item";
 
     const name = document.createElement("strong");
-    name.textContent = stats.strategy;
+    name.textContent = itemStats[labelKey];
     item.appendChild(name);
 
     const details = document.createElement("span");
-    details.textContent = `${stats.games}局 / 勝率 ${formatPercent(stats.win_rate)}`;
+    details.textContent = `${itemStats.games}局 / 勝率 ${formatPercent(itemStats.win_rate)}`;
     item.appendChild(details);
 
     const record = document.createElement("small");
-    record.textContent = `${stats.wins}勝 ${stats.losses}敗 ${stats.draws}分`;
+    record.textContent = `${itemStats.wins}勝 ${itemStats.losses}敗 ${itemStats.draws}分`;
     item.appendChild(record);
 
-    strategyStatsList.appendChild(item);
+    listElement.appendChild(item);
   }
 }
 
@@ -499,28 +525,37 @@ async function loadGames() {
   showListView();
   setStatus("読み込み中");
   try {
-    const [gamesResponse, statsResponse] = await Promise.all([
+    const [gamesResponse, strategyStatsResponse, enclosureStatsResponse] = await Promise.all([
       fetch("/api/games"),
       fetch("/api/stats/strategies"),
+      fetch("/api/stats/enclosures"),
     ]);
     if (!gamesResponse.ok) {
       throw new Error(`HTTP ${gamesResponse.status}`);
     }
-    if (!statsResponse.ok) {
-      throw new Error(`HTTP ${statsResponse.status}`);
+    if (!strategyStatsResponse.ok) {
+      throw new Error(`HTTP ${strategyStatsResponse.status}`);
+    }
+    if (!enclosureStatsResponse.ok) {
+      throw new Error(`HTTP ${enclosureStatsResponse.status}`);
     }
     const payload = await gamesResponse.json();
-    const statsPayload = await statsResponse.json();
+    const strategyStatsPayload = await strategyStatsResponse.json();
+    const enclosureStatsPayload = await enclosureStatsResponse.json();
     state.games = Array.isArray(payload.games) ? payload.games : [];
-    state.strategyStats = Array.isArray(statsPayload.strategies) ? statsPayload.strategies : [];
+    state.strategyStats = Array.isArray(strategyStatsPayload.strategies) ? strategyStatsPayload.strategies : [];
+    state.enclosureStats = Array.isArray(enclosureStatsPayload.enclosures) ? enclosureStatsPayload.enclosures : [];
     setStatus("");
     renderStrategyStats();
+    renderEnclosureStats();
     renderList();
   } catch (error) {
     state.games = [];
     state.strategyStats = [];
+    state.enclosureStats = [];
     setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
     renderStrategyStats();
+    renderEnclosureStats();
     renderList();
   }
 }
