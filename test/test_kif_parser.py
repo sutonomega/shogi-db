@@ -77,6 +77,20 @@ KIF_WITH_INLINE_ANALYSIS = """\
 まで2手で後手の勝ち
 """
 
+KIF_WITH_GAME_ANALYSIS = """\
+開始日時：2024/06/04 10:00:00
+手合割：平手
+先手：対局A
+後手：対局B
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+**対局 時間 00:00.4 深さ 17/23 ノード数 2003187 評価値 -20 読み筋 ▲３七桂 △４一玉
+   2 ３四歩(33)    ( 0:01/00:00:01)
+**対局 時間 00:00.4 深さ 27/16 ノード数 2001792 評価値 -詰 15 読み筋 △３六角 ▲３八玉
+   3 投了
+まで2手で後手の勝ち
+"""
+
 KIF_WITH_ANALYSIS_BEFORE_MOVES = """\
 開始日時：2024/06/03 10:00:00
 手合割：平手
@@ -289,6 +303,23 @@ class TestWithInlineAnalysis(unittest.TestCase):
 
     def test_no_candidates(self):
         self.assertEqual(self.record.moves[0].candidates, [])
+
+
+class TestWithGameAnalysis(unittest.TestCase):
+    def setUp(self):
+        self.record = KifParser().parse(KIF_WITH_GAME_ANALYSIS)
+
+    def test_eval_from_game_analysis_header(self):
+        self.assertEqual(self.record.moves[0].eval, -20)
+
+    def test_pv_from_game_analysis_header(self):
+        self.assertEqual(self.record.moves[0].pv, "▲３七桂 △４一玉")
+
+    def test_best_move_keeps_kif_notation(self):
+        self.assertEqual(self.record.moves[0].best_move, "▲３七桂")
+
+    def test_game_analysis_tsumi(self):
+        self.assertEqual(self.record.moves[1].eval, -100_000)
 
 
 class TestWithAnalysisBeforeMoves(unittest.TestCase):

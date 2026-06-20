@@ -101,6 +101,66 @@ input {
   margin-bottom: 12px;
 }
 
+.import-form {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 180px) auto;
+  align-items: end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.import-form input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.file-picker,
+.import-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.file-picker:hover,
+.import-form button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.import-form button {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.import-form button:hover:not(:disabled) {
+  color: #ffffff;
+}
+
+.import-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+#importFileName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .search-field {
   display: grid;
   gap: 6px;
@@ -458,10 +518,17 @@ input {
   stroke-width: 3;
 }
 
+.eval-missing-line {
+  stroke: #1f6f8b;
+  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
 .eval-point {
-  fill: #1f6f8b;
-  stroke: var(--surface);
-  stroke-width: 1.5;
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 0;
   cursor: pointer;
 }
 
@@ -471,8 +538,15 @@ input {
   stroke-width: 2;
 }
 
+.eval-point:hover {
+  fill: #1f6f8b;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
 .eval-point:focus {
   outline: none;
+  fill: #1f6f8b;
   stroke: #163f2d;
   stroke-width: 3;
 }
@@ -519,6 +593,26 @@ input {
 }
 
 @media (max-width: 640px) {
+  .toolbar,
+  .import-form {
+    align-items: stretch;
+  }
+
+  .toolbar {
+    flex-direction: column;
+  }
+
+  .import-form {
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  #importFileName {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
   .app-shell {
     width: min(100% - 20px, 1120px);
     padding-top: 14px;

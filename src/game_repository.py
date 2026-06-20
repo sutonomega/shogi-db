@@ -138,6 +138,7 @@ class GameRepository:
         if skip_duplicates:
             existing_id = self.find_game_id_by_raw_kif(game.raw_kif)
             if existing_id is not None:
+                self._replace_game(existing_id, game, positions, strategy, enclosure)
                 return existing_id
 
         with self.connection:
@@ -186,6 +187,67 @@ class GameRepository:
             )
 
         return game_id
+
+    def _replace_game(
+        self,
+        game_id: int,
+        game: GameRecord,
+        positions: list[PositionRecord],
+        strategy: str | None,
+        enclosure: str | None,
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE games
+                SET played_at = ?,
+                    black = ?,
+                    white = ?,
+                    winner = ?,
+                    move_count = ?,
+                    strategy = ?,
+                    enclosure = ?,
+                    raw_kif = ?
+                WHERE id = ?
+                """,
+                (
+                    game.played_at,
+                    game.black,
+                    game.white,
+                    game.winner,
+                    game.move_count,
+                    strategy,
+                    enclosure,
+                    game.raw_kif,
+                    game_id,
+                ),
+            )
+            self.connection.execute(
+                "DELETE FROM positions WHERE game_id = ?",
+                (game_id,),
+            )
+            self.connection.executemany(
+                """
+                INSERT INTO positions (
+                    game_id, move_number, sfen, move, eval,
+                    best_move, pv, candidates
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        game_id,
+                        position.move_number,
+                        position.sfen,
+                        position.move_usi,
+                        position.eval,
+                        position.best_move,
+                        position.pv,
+                        self._dump_candidates(position),
+                    )
+                    for position in positions
+                ],
+            )
 
     def find_game_id_by_raw_kif(self, raw_kif: str) -> int | None:
         row = self.connection.execute(

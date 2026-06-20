@@ -61,6 +61,8 @@
 ```
 KIF ファイル
     ↓ POST /api/games/import
+UTF-8 / CP932 を自動判定してテキスト化
+    ↓
 KIF パーサー（ヘッダー解析・指し手解析・評価値抽出）
     ↓
 KIF 手 → USI → 局面再生 → SFEN 生成（手番ごと）

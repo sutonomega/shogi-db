@@ -42,6 +42,10 @@ const blunderList = document.querySelector("#blunderList");
 const blunderSummary = document.querySelector("#blunderSummary");
 const summaryText = document.querySelector("#summaryText");
 const searchInput = document.querySelector("#searchInput");
+const importForm = document.querySelector("#importForm");
+const kifFileInput = document.querySelector("#kifFileInput");
+const importFileName = document.querySelector("#importFileName");
+const importButton = document.querySelector("#importButton");
 const refreshButton = document.querySelector("#refreshButton");
 const backButton = document.querySelector("#backButton");
 const pageSubtitle = document.querySelector("#pageSubtitle");
@@ -184,6 +188,12 @@ function renderList() {
     row.appendChild(tableCell(`${game.move_count ?? 0}手`));
     rowsElement.appendChild(row);
   }
+}
+
+function updateImportFileName() {
+  const file = kifFileInput.files?.[0] || null;
+  importFileName.textContent = file ? file.name : "未選択";
+  importButton.disabled = !file;
 }
 
 function renderStrategyStats() {
@@ -468,7 +478,7 @@ function renderEvalGraph() {
 
   const width = 640;
   const height = 220;
-  const padding = { top: 18, right: 22, bottom: 30, left: 44 };
+  const padding = { top: 18, right: 22, bottom: 30, left: 0 };
   const graphWidth = width - padding.left - padding.right;
   const graphHeight = height - padding.top - padding.bottom;
   const maxIndex = Math.max(points.length - 1, 1);
@@ -480,6 +490,7 @@ function renderEvalGraph() {
   drawGraphLine(padding.left, yFor(0), width - padding.right, yFor(0), "eval-zero");
   drawGraphLine(padding.left, yFor(-evalScale), width - padding.right, yFor(-evalScale), "eval-grid");
   drawGraphLine(xFor(state.currentMove), padding.top, xFor(state.currentMove), height - padding.bottom, "eval-current");
+  drawMissingEvalLines(points, xFor, yFor(0));
 
   for (const label of [
     { text: `+${evalScale}`, y: yFor(evalScale) },
@@ -543,6 +554,24 @@ function renderEvalGraph() {
       }
     });
     evalGraph.appendChild(circle);
+  }
+}
+
+function drawMissingEvalLines(points, xFor, y) {
+  let startIndex = null;
+  for (const point of points) {
+    if (point.eval === null) {
+      if (startIndex === null) startIndex = point.index;
+      continue;
+    }
+    if (startIndex !== null && startIndex < point.index) {
+      drawGraphLine(xFor(startIndex), y, xFor(point.index), y, "eval-missing-line");
+    }
+    startIndex = null;
+  }
+  const lastPoint = points[points.length - 1];
+  if (startIndex !== null && lastPoint && startIndex < lastPoint.index) {
+    drawGraphLine(xFor(startIndex), y, xFor(lastPoint.index), y, "eval-missing-line");
   }
 }
 
@@ -648,9 +677,44 @@ async function loadViewer(gameId) {
   }
 }
 
+async function importKifFile(file) {
+  importButton.disabled = true;
+  setStatus("取り込み中");
+  try {
+    const response = await fetch("/api/games/import", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+      body: file,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    kifFileInput.value = "";
+    updateImportFileName();
+    await loadGames();
+    setStatus(`取り込みました: ${payload.game.black} vs ${payload.game.white}`);
+  } catch (error) {
+    setStatus(`KIFを取り込めませんでした: ${error.message}`, "error");
+  } finally {
+    updateImportFileName();
+  }
+}
+
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
   renderList();
+});
+
+kifFileInput.addEventListener("change", updateImportFileName);
+
+importForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const file = kifFileInput.files?.[0] || null;
+  if (!file) return;
+  importKifFile(file);
 });
 
 refreshButton.addEventListener("click", () => {
