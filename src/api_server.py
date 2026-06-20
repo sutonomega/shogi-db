@@ -21,12 +21,16 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     static_root: Path
 
     def do_POST(self) -> None:
-        if self.path != "/api/games/import":
+        path = urlparse(self.path).path
+        if path not in ("/api/games/import", "/api/games/import-directory"):
             self._send_json({"error": "Not found"}, 404)
             return
 
         try:
-            self._send_json(self._import_game_from_request(), 201)
+            if path == "/api/games/import-directory":
+                self._send_json(self._import_directory_from_request(), 201)
+            else:
+                self._send_json(self._import_game_from_request(), 201)
         except ApiError as exc:
             self._send_json({"error": exc.message}, exc.status_code)
         except KifEncodingError as exc:
@@ -83,6 +87,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         raw_body = self._read_body()
         content_type = self.headers.get("Content-Type", "")
         return import_game_payload(self.api, content_type, raw_body)
+
+    def _import_directory_from_request(self) -> dict:
+        raw_body = self._read_body()
+        return import_directory_payload(self.api, raw_body)
 
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -147,6 +155,20 @@ def import_game_payload(api: ShogiDbApi, content_type: str, raw_body: bytes) -> 
             raise ApiError("Request body must contain string field: kif", 400)
         return api.import_game(kif_text)
     return api.import_game_bytes(raw_body)
+
+
+def import_directory_payload(api: ShogiDbApi, raw_body: bytes) -> dict:
+    payload = _decode_json_payload(raw_body)
+    directory_path = payload.get("path")
+    recursive = payload.get("recursive", False)
+    if not isinstance(directory_path, str):
+        raise ApiError("Request body must contain string field: path", 400)
+    if not isinstance(recursive, bool):
+        raise ApiError("Request body field recursive must be boolean", 400)
+    return api.import_games_from_directory(
+        directory_path,
+        recursive=recursive,
+    )
 
 
 def _decode_json_payload(raw_body: bytes) -> dict:

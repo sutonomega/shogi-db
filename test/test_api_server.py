@@ -2,10 +2,12 @@ import json
 import tempfile
 import threading
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from src.api_server import create_server, import_game_payload
+from src.api_server import create_server, import_directory_payload, import_game_payload
 from src.api import ShogiDbApi
 from src.game_repository import GameRepository
 
@@ -133,6 +135,26 @@ class TestImportGamePayload(unittest.TestCase):
 
         self.assertEqual(response["game"]["black"], "解析太郎")
         self.assertEqual(response["positions_count"], 3)
+
+    def test_import_directory_payload(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+
+            response = import_directory_payload(
+                self.api,
+                json.dumps({"path": str(directory), "recursive": False}).encode("utf-8"),
+            )
+
+        self.assertEqual(response["total"], 1)
+        self.assertEqual(response["imported"], 1)
+
+    def test_import_directory_payload_requires_path(self):
+        with self.assertRaisesRegex(Exception, "path"):
+            import_directory_payload(
+                self.api,
+                json.dumps({"recursive": False}).encode("utf-8"),
+            )
 
 
 if __name__ == "__main__":

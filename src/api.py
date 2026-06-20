@@ -3,6 +3,7 @@ Application API operations for importing and reading games.
 """
 
 import json
+from pathlib import Path
 
 from .enclosure_detector import EnclosureDetector
 from .game_repository import (
@@ -56,6 +57,51 @@ class ShogiDbApi:
             raise ApiError("KIF file is empty", 400)
         return self.import_game(decode_kif_bytes(kif_data))
 
+    def import_games_from_directory(
+        self,
+        directory_path: str,
+        *,
+        recursive: bool = False,
+    ) -> dict:
+        if not directory_path.strip():
+            raise ApiError("Directory path is empty", 400)
+        directory = Path(directory_path).expanduser()
+        if not directory.is_dir():
+            raise ApiError(f"Directory not found: {directory_path}", 400)
+
+        total = 0
+        imported = 0
+        errors = []
+        imported_games = []
+
+        for file_path in self._iter_kif_files(directory, recursive=recursive):
+            total += 1
+            try:
+                response = self.import_game_bytes(file_path.read_bytes())
+            except Exception as exc:
+                errors.append({
+                    "path": str(file_path),
+                    "error": str(exc),
+                })
+                continue
+
+            imported += 1
+            imported_games.append({
+                "path": str(file_path),
+                "game": response["game"],
+                "positions_count": response["positions_count"],
+            })
+
+        return {
+            "path": str(directory),
+            "recursive": recursive,
+            "total": total,
+            "imported": imported,
+            "failed": len(errors),
+            "errors": errors,
+            "games": imported_games,
+        }
+
     def list_games(self) -> dict:
         return {
             "games": [
@@ -63,6 +109,13 @@ class ShogiDbApi:
                 for game in self.repository.list_games()
             ]
         }
+
+    @staticmethod
+    def _iter_kif_files(directory: Path, *, recursive: bool):
+        paths = directory.rglob("*") if recursive else directory.iterdir()
+        for path in paths:
+            if path.is_file() and path.suffix.lower() == ".kif":
+                yield path
 
     def get_positions(self, game_id: int) -> dict:
         game = self.repository.get_game(game_id)

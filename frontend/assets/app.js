@@ -46,6 +46,10 @@ const importForm = document.querySelector("#importForm");
 const kifFileInput = document.querySelector("#kifFileInput");
 const importFileName = document.querySelector("#importFileName");
 const importButton = document.querySelector("#importButton");
+const directoryImportForm = document.querySelector("#directoryImportForm");
+const directoryPathInput = document.querySelector("#directoryPathInput");
+const recursiveImportInput = document.querySelector("#recursiveImportInput");
+const directoryImportButton = document.querySelector("#directoryImportButton");
 const refreshButton = document.querySelector("#refreshButton");
 const backButton = document.querySelector("#backButton");
 const pageSubtitle = document.querySelector("#pageSubtitle");
@@ -703,6 +707,34 @@ async function importKifFile(file) {
   }
 }
 
+async function importKifDirectory(directoryPath, recursive) {
+  directoryImportButton.disabled = true;
+  setStatus("一括取り込み中");
+  try {
+    const response = await fetch("/api/games/import-directory", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: directoryPath,
+        recursive,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    await loadGames();
+    const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
+    setStatus(`一括取り込み完了: ${payload.imported} / ${payload.total}件${failedText}`);
+  } catch (error) {
+    setStatus(`KIFフォルダを取り込めませんでした: ${error.message}`, "error");
+  } finally {
+    directoryImportButton.disabled = false;
+  }
+}
+
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
   renderList();
@@ -715,6 +747,16 @@ importForm.addEventListener("submit", (event) => {
   const file = kifFileInput.files?.[0] || null;
   if (!file) return;
   importKifFile(file);
+});
+
+directoryImportForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const directoryPath = directoryPathInput.value.trim();
+  if (!directoryPath) {
+    setStatus("KIFフォルダのパスを入力してください", "error");
+    return;
+  }
+  importKifDirectory(directoryPath, recursiveImportInput.checked);
 });
 
 refreshButton.addEventListener("click", () => {

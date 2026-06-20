@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from src.api import ApiError, ShogiDbApi
 from src.game_repository import GameRepository
@@ -110,6 +112,54 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(response["game"]["black"], "解析太郎")
         self.assertEqual(response["game"]["move_count"], 2)
+
+    def test_import_games_from_directory(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "utf8.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "cp932.kif").write_bytes(SHIKENBISHA_KIF.encode("cp932"))
+            (directory / "memo.txt").write_text("ignored", encoding="utf-8")
+
+            response = self.api.import_games_from_directory(str(directory))
+
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 2)
+        self.assertEqual(response["failed"], 0)
+        self.assertEqual(len(response["games"]), 2)
+        self.assertEqual(len(self.api.list_games()["games"]), 2)
+
+    def test_import_games_from_directory_continues_after_error(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "ok.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "bad.kif").write_bytes(b"\x81")
+
+            response = self.api.import_games_from_directory(str(directory))
+
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 1)
+        self.assertEqual(response["failed"], 1)
+        self.assertIn("bad.kif", response["errors"][0]["path"])
+
+    def test_import_games_from_directory_recursive(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            child = directory / "child"
+            child.mkdir()
+            (child / "game.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+
+            non_recursive = self.api.import_games_from_directory(str(directory))
+            recursive = self.api.import_games_from_directory(str(directory), recursive=True)
+
+        self.assertEqual(non_recursive["total"], 0)
+        self.assertEqual(recursive["total"], 1)
+        self.assertEqual(recursive["imported"], 1)
+
+    def test_import_games_from_directory_missing_path_raises_api_error(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.import_games_from_directory("/path/that/does/not/exist")
+
+        self.assertEqual(context.exception.status_code, 400)
 
     def test_import_game_detects_strategy(self):
         response = self.api.import_game(SHIKENBISHA_KIF)
