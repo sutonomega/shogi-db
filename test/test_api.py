@@ -281,6 +281,27 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_get_openings(self):
+        first_game = self.api.import_game(KIF_WITH_ANALYSIS)
+        start_sfen = self.api.get_positions(first_game["game"]["id"])["positions"][0]["sfen"]
+        self.api.rebuild_openings()
+
+        response = self.api.get_openings(start_sfen)
+
+        self.assertEqual(response["source"], "self")
+        self.assertEqual(response["sfen"], start_sfen)
+        self.assertEqual(response["total"], 1)
+        self.assertEqual(response["moves"][0]["move"], "7g7f")
+        self.assertEqual(response["moves"][0]["count"], 1)
+        self.assertEqual(response["moves"][0]["ratio"], 1.0)
+        self.assertEqual(response["moves"][0]["avg_eval"], 64)
+
+    def test_get_openings_rejects_empty_sfen(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.get_openings("")
+
+        self.assertEqual(context.exception.status_code, 400)
+
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)
 

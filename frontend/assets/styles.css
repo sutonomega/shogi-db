@@ -512,6 +512,34 @@ input {
   white-space: nowrap;
 }
 
+.panel-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-heading-actions button {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.panel-heading-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel-heading-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .eval-graph {
   display: block;
   width: 100%;
@@ -527,7 +555,8 @@ input {
   display: none;
 }
 
-.move-frequency-panel {
+.move-frequency-panel,
+.opening-panel {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
@@ -535,12 +564,14 @@ input {
   padding-bottom: 16px;
 }
 
-.move-frequency-list {
+.move-frequency-list,
+.opening-list {
   display: grid;
   gap: 8px;
 }
 
-.move-frequency-item {
+.move-frequency-item,
+.opening-item {
   display: grid;
   gap: 6px;
   min-width: 0;
@@ -550,14 +581,16 @@ input {
   background: #fbfcfd;
 }
 
-.move-frequency-heading {
+.move-frequency-heading,
+.opening-heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
 }
 
-.move-frequency-heading strong {
+.move-frequency-heading strong,
+.opening-heading strong {
   overflow: hidden;
   font-size: 14px;
   text-overflow: ellipsis;
@@ -565,24 +598,32 @@ input {
 }
 
 .move-frequency-heading span,
-.move-frequency-item small {
+.move-frequency-item small,
+.opening-heading span,
+.opening-item small {
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
 }
 
-.move-frequency-bar {
+.move-frequency-bar,
+.opening-bar {
   overflow: hidden;
   height: 6px;
   border-radius: 999px;
   background: var(--surface-muted);
 }
 
-.move-frequency-bar span {
+.move-frequency-bar span,
+.opening-bar span {
   display: block;
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
+}
+
+.opening-bar span {
+  background: #2b6cb0;
 }
 
 .eval-grid {

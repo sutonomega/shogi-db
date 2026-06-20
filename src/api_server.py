@@ -89,6 +89,13 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.get_position_frequency(sfen), 200)
                 return
 
+            if path == "/api/openings":
+                query = parse_qs(parsed_url.query)
+                sfen = query.get("sfen", [""])[0]
+                source = query.get("source", ["self"])[0]
+                self._send_json(self.api.get_openings(sfen, source=source), 200)
+                return
+
             parts = path.strip("/").split("/")
             if (
                 len(parts) == 5

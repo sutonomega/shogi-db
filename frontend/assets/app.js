@@ -7,6 +7,9 @@ const state = {
   moveFrequencies: [],
   moveFrequencyTotal: 0,
   moveFrequencyRequestId: 0,
+  openings: [],
+  openingTotal: 0,
+  openingRequestId: 0,
   game: null,
   query: "",
   currentMove: 0,
@@ -79,6 +82,9 @@ const evalSummary = document.querySelector("#evalSummary");
 const evalGraphStatus = document.querySelector("#evalGraphStatus");
 const moveFrequencyList = document.querySelector("#moveFrequencyList");
 const moveFrequencySummary = document.querySelector("#moveFrequencySummary");
+const openingList = document.querySelector("#openingList");
+const openingSummary = document.querySelector("#openingSummary");
+const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
 const svgNamespace = "http://www.w3.org/2000/svg";
 const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
@@ -298,6 +304,49 @@ function renderMoveFrequencies() {
     item.appendChild(details);
 
     moveFrequencyList.appendChild(item);
+  }
+}
+
+function renderOpenings() {
+  openingList.textContent = "";
+  openingSummary.textContent = `${state.openingTotal}回`;
+
+  if (!state.openings.length) {
+    const empty = document.createElement("p");
+    empty.className = "stats-empty";
+    empty.textContent = "この局面の保存済み定跡はありません";
+    openingList.appendChild(empty);
+    return;
+  }
+
+  for (const opening of state.openings) {
+    const item = document.createElement("article");
+    item.className = "opening-item";
+
+    const heading = document.createElement("div");
+    heading.className = "opening-heading";
+
+    const move = document.createElement("strong");
+    move.textContent = opening.move;
+    heading.appendChild(move);
+
+    const count = document.createElement("span");
+    count.textContent = `${opening.count}回`;
+    heading.appendChild(count);
+    item.appendChild(heading);
+
+    const bar = document.createElement("div");
+    bar.className = "opening-bar";
+    const fill = document.createElement("span");
+    fill.style.width = `${Math.round((opening.ratio || 0) * 100)}%`;
+    bar.appendChild(fill);
+    item.appendChild(bar);
+
+    const details = document.createElement("small");
+    details.textContent = `割合 ${formatPercent(opening.ratio)} / 平均評価値 ${formatEval(opening.avg_eval)}`;
+    item.appendChild(details);
+
+    openingList.appendChild(item);
   }
 }
 
@@ -659,6 +708,7 @@ function setCurrentMove(moveNumber) {
   state.currentMove = Math.max(0, Math.min(moveNumber, max));
   renderBoard();
   loadMoveFrequencies();
+  loadOpenings();
 }
 
 async function loadGames() {
@@ -729,17 +779,23 @@ async function loadViewer(gameId) {
     state.currentMove = 0;
     state.moveFrequencies = [];
     state.moveFrequencyTotal = 0;
+    state.openings = [];
+    state.openingTotal = 0;
     setStatus("");
     renderBoard();
     loadMoveFrequencies();
+    loadOpenings();
   } catch (error) {
     state.game = null;
     state.positions = [];
     state.moveFrequencies = [];
     state.moveFrequencyTotal = 0;
+    state.openings = [];
+    state.openingTotal = 0;
     setStatus(`局面データを取得できませんでした: ${error.message}`, "error");
     renderBoard();
     renderMoveFrequencies();
+    renderOpenings();
   }
 }
 
@@ -772,6 +828,66 @@ async function loadMoveFrequencies() {
     if (requestId === state.moveFrequencyRequestId) {
       renderMoveFrequencies();
     }
+  }
+}
+
+async function loadOpenings() {
+  const position = state.positions[state.currentMove];
+  const requestId = state.openingRequestId + 1;
+  state.openingRequestId = requestId;
+
+  if (!position?.sfen) {
+    state.openings = [];
+    state.openingTotal = 0;
+    renderOpenings();
+    return;
+  }
+
+  try {
+    const query = new URLSearchParams({
+      source: "self",
+      sfen: position.sfen,
+    });
+    const response = await fetch(`/api/openings?${query.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (requestId !== state.openingRequestId) return;
+    state.openings = Array.isArray(payload.moves) ? payload.moves : [];
+    state.openingTotal = Number.isFinite(payload.total) ? payload.total : 0;
+  } catch (error) {
+    if (requestId !== state.openingRequestId) return;
+    state.openings = [];
+    state.openingTotal = 0;
+  } finally {
+    if (requestId === state.openingRequestId) {
+      renderOpenings();
+    }
+  }
+}
+
+async function rebuildOpenings() {
+  rebuildOpeningsButton.disabled = true;
+  setStatus("定跡DBを更新中");
+  try {
+    const response = await fetch("/api/openings/rebuild", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ source: "self" }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    await loadOpenings();
+    setStatus(`定跡DBを更新しました: ${payload.count}件`);
+  } catch (error) {
+    setStatus(`定跡DBを更新できませんでした: ${error.message}`, "error");
+  } finally {
+    rebuildOpeningsButton.disabled = false;
   }
 }
 
@@ -925,6 +1041,7 @@ directoryImportForm.addEventListener("submit", (event) => {
 });
 
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
+rebuildOpeningsButton.addEventListener("click", rebuildOpenings);
 
 refreshButton.addEventListener("click", () => {
   loadGames();

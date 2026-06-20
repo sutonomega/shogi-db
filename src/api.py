@@ -201,6 +201,23 @@ class ShogiDbApi:
             ],
         }
 
+    def get_openings(self, sfen: str, source: str = "self") -> dict:
+        if not sfen.strip():
+            raise ApiError("SFEN is empty", 400)
+        if not source.strip():
+            raise ApiError("Opening source is empty", 400)
+        openings = self.repository.list_openings(source=source, sfen=sfen)
+        total = sum(opening.count for opening in openings)
+        return {
+            "source": source,
+            "sfen": sfen,
+            "total": total,
+            "moves": [
+                self._opening_to_dict(opening, total=total)
+                for opening in openings
+            ],
+        }
+
     def _game_to_dict(self, game: StoredGame | None) -> dict:
         if game is None:
             raise ApiError("Saved game could not be loaded", 500)
@@ -276,11 +293,18 @@ class ShogiDbApi:
             "avg_eval": frequency.avg_eval,
         }
 
-    def _opening_to_dict(self, opening: OpeningAggregate) -> dict:
-        return {
+    def _opening_to_dict(
+        self,
+        opening: OpeningAggregate,
+        total: int | None = None,
+    ) -> dict:
+        data = {
             "source": opening.source,
             "sfen": opening.sfen,
             "move": opening.move,
             "count": opening.count,
             "avg_eval": opening.avg_eval,
         }
+        if total is not None:
+            data["ratio"] = opening.count / total if total else None
+        return data
