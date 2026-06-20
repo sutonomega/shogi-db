@@ -80,6 +80,15 @@ class BlunderRecord:
     loss: int
 
 
+@dataclass
+class OpeningAggregate:
+    source: str
+    sfen: str
+    move: str
+    count: int
+    avg_eval: int | None
+
+
 class GameRepository:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
@@ -122,6 +131,22 @@ class GameRepository:
                 ON positions(game_id);
             CREATE INDEX IF NOT EXISTS idx_positions_sfen
                 ON positions(sfen);
+
+            CREATE TABLE IF NOT EXISTS openings (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                source      TEXT NOT NULL DEFAULT 'self',
+                sfen        TEXT NOT NULL,
+                move        TEXT NOT NULL,
+                count       INTEGER NOT NULL DEFAULT 0,
+                avg_eval    INTEGER,
+                updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(source, sfen, move)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_openings_sfen
+                ON openings(sfen);
+            CREATE INDEX IF NOT EXISTS idx_openings_source_sfen
+                ON openings(source, sfen);
             """
         )
         self.connection.commit()
@@ -431,6 +456,36 @@ class GameRepository:
                 eval_after=int(row["eval_after"]),
                 eval_delta=int(row["eval_delta"]),
                 loss=abs(int(row["eval_delta"])),
+            )
+            for row in rows
+        ]
+
+    def list_opening_aggregates(self, source: str = "self") -> list[OpeningAggregate]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                ? AS source,
+                previous.sfen AS sfen,
+                current.move AS move,
+                COUNT(*) AS count,
+                CAST(ROUND(AVG(current.eval)) AS INTEGER) AS avg_eval
+            FROM positions AS current
+            JOIN positions AS previous
+                ON previous.game_id = current.game_id
+                AND previous.move_number = current.move_number - 1
+            WHERE current.move IS NOT NULL
+            GROUP BY previous.sfen, current.move
+            ORDER BY count DESC, previous.sfen ASC, current.move ASC
+            """,
+            (source,),
+        ).fetchall()
+        return [
+            OpeningAggregate(
+                source=row["source"],
+                sfen=row["sfen"],
+                move=row["move"],
+                count=int(row["count"]),
+                avg_eval=int(row["avg_eval"]) if row["avg_eval"] is not None else None,
             )
             for row in rows
         ]
