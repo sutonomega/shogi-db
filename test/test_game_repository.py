@@ -221,6 +221,16 @@ class TestGameRepository(unittest.TestCase):
         ).fetchone()["count"]
         self.assertEqual(count, len(self.positions))
 
+    def test_list_games_does_not_load_raw_kif_body(self):
+        game_id = self.repository.save_game(self.game, self.positions)
+
+        listed_game = self.repository.list_games()[0]
+        stored_game = self.repository.get_game(game_id)
+
+        self.assertEqual(listed_game.id, game_id)
+        self.assertEqual(listed_game.raw_kif, "")
+        self.assertEqual(stored_game.raw_kif, KIF_WITH_ANALYSIS)
+
     def test_list_opening_aggregates_counts_moves_by_previous_sfen(self):
         start_sfen = "startpos b - 1"
         after_76 = "after 7g7f w - 2"
