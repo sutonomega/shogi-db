@@ -478,7 +478,7 @@ function renderEvalGraph() {
 
   const width = 640;
   const height = 220;
-  const padding = { top: 18, right: 22, bottom: 30, left: 44 };
+  const padding = { top: 18, right: 22, bottom: 30, left: 0 };
   const graphWidth = width - padding.left - padding.right;
   const graphHeight = height - padding.top - padding.bottom;
   const maxIndex = Math.max(points.length - 1, 1);
