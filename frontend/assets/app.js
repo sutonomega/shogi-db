@@ -719,20 +719,56 @@ async function importKifDirectory(directoryPath, recursive) {
       body: JSON.stringify({
         path: directoryPath,
         recursive,
+        async: true,
       }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
-    await loadGames();
-    const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
-    setStatus(`一括取り込み完了: ${payload.imported} / ${payload.total}件${failedText}`);
+    await pollDirectoryImportJob(payload.id);
   } catch (error) {
     setStatus(`KIFフォルダを取り込めませんでした: ${error.message}`, "error");
   } finally {
     directoryImportButton.disabled = false;
   }
+}
+
+async function pollDirectoryImportJob(jobId) {
+  let payload = null;
+  while (true) {
+    const response = await fetch(`/api/games/import-directory/jobs/${jobId}`);
+    payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setDirectoryImportStatus(payload);
+    if (payload.done) break;
+    await wait(500);
+  }
+  await loadGames();
+  const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
+  setStatus(`一括取り込み完了: ${payload.imported} / ${payload.total}件${failedText}`);
+}
+
+function setDirectoryImportStatus(payload) {
+  if (payload.status === "scanning") {
+    setStatus("KIFフォルダをスキャン中");
+    return;
+  }
+  if (payload.status === "failed") {
+    setStatus(`一括取り込み失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
+    return;
+  }
+  const total = Number.isFinite(payload.total) ? payload.total : 0;
+  const processed = Number.isFinite(payload.processed) ? payload.processed : 0;
+  setStatus(`一括取り込み中: ${processed}/${total}`);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 searchInput.addEventListener("input", (event) => {

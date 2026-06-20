@@ -62,6 +62,7 @@ class ShogiDbApi:
         directory_path: str,
         *,
         recursive: bool = False,
+        progress_callback=None,
     ) -> dict:
         if not directory_path.strip():
             raise ApiError("Directory path is empty", 400)
@@ -69,13 +70,15 @@ class ShogiDbApi:
         if not directory.is_dir():
             raise ApiError(f"Directory not found: {directory_path}", 400)
 
-        total = 0
+        total = self.count_kif_files(directory, recursive=recursive)
+        processed = 0
         imported = 0
         errors = []
         imported_games = []
+        if progress_callback is not None:
+            progress_callback(processed, total)
 
         for file_path in self._iter_kif_files(directory, recursive=recursive):
-            total += 1
             try:
                 response = self.import_game_bytes(file_path.read_bytes())
             except Exception as exc:
@@ -83,14 +86,22 @@ class ShogiDbApi:
                     "path": str(file_path),
                     "error": str(exc),
                 })
+                processed += 1
+                if progress_callback is not None:
+                    progress_callback(processed, total)
                 continue
 
             imported += 1
+            game = dict(response["game"])
+            game.pop("raw_kif", None)
             imported_games.append({
                 "path": str(file_path),
-                "game": response["game"],
+                "game": game,
                 "positions_count": response["positions_count"],
             })
+            processed += 1
+            if progress_callback is not None:
+                progress_callback(processed, total)
 
         return {
             "path": str(directory),
@@ -116,6 +127,9 @@ class ShogiDbApi:
         for path in paths:
             if path.is_file() and path.suffix.lower() == ".kif":
                 yield path
+
+    def count_kif_files(self, directory: Path, *, recursive: bool) -> int:
+        return sum(1 for _ in self._iter_kif_files(directory, recursive=recursive))
 
     def get_positions(self, game_id: int) -> dict:
         game = self.repository.get_game(game_id)

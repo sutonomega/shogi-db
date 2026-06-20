@@ -127,6 +127,22 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["failed"], 0)
         self.assertEqual(len(response["games"]), 2)
         self.assertEqual(len(self.api.list_games()["games"]), 2)
+        self.assertNotIn("raw_kif", response["games"][0]["game"])
+
+    def test_import_games_from_directory_reports_progress(self):
+        progress = []
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "first.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "second.kif").write_bytes(SHIKENBISHA_KIF.encode("utf-8"))
+
+            self.api.import_games_from_directory(
+                str(directory),
+                progress_callback=lambda processed, total: progress.append((processed, total)),
+            )
+
+        self.assertEqual(progress[0], (0, 2))
+        self.assertEqual(progress[-1], (2, 2))
 
     def test_import_games_from_directory_continues_after_error(self):
         with TemporaryDirectory() as temp_dir:

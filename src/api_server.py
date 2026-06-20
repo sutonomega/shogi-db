@@ -7,6 +7,8 @@ the MVP endpoints without introducing framework setup yet.
 
 import json
 import mimetypes
+import threading
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -18,6 +20,7 @@ from .game_repository import GameRepository
 
 class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     api: ShogiDbApi
+    import_jobs: "DirectoryImportJobStore"
     static_root: Path
 
     def do_POST(self) -> None:
@@ -28,7 +31,8 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
 
         try:
             if path == "/api/games/import-directory":
-                self._send_json(self._import_directory_from_request(), 201)
+                payload, status_code = self._import_directory_from_request()
+                self._send_json(payload, status_code)
             else:
                 self._send_json(self._import_game_from_request(), 201)
         except ApiError as exc:
@@ -64,6 +68,17 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
 
             parts = path.strip("/").split("/")
             if (
+                len(parts) == 5
+                and parts[0] == "api"
+                and parts[1] == "games"
+                and parts[2] == "import-directory"
+                and parts[3] == "jobs"
+            ):
+                self._send_json(self.import_jobs.get(parts[4]), 200)
+                return
+
+            parts = path.strip("/").split("/")
+            if (
                 len(parts) == 4
                 and parts[0] == "api"
                 and parts[1] == "games"
@@ -88,9 +103,15 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         content_type = self.headers.get("Content-Type", "")
         return import_game_payload(self.api, content_type, raw_body)
 
-    def _import_directory_from_request(self) -> dict:
+    def _import_directory_from_request(self) -> tuple[dict, int]:
         raw_body = self._read_body()
-        return import_directory_payload(self.api, raw_body)
+        payload = _decode_json_payload(raw_body)
+        async_import = payload.get("async", False)
+        if not isinstance(async_import, bool):
+            raise ApiError("Request body field async must be boolean", 400)
+        if async_import:
+            return start_import_directory_payload(self.import_jobs, payload), 202
+        return import_directory_payload(self.api, payload), 201
 
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -140,6 +161,7 @@ def create_server(
         pass
 
     Handler.api = api
+    Handler.import_jobs = DirectoryImportJobStore(api)
     Handler.static_root = root
     return ThreadingHTTPServer((host, port), Handler)
 
@@ -157,8 +179,87 @@ def import_game_payload(api: ShogiDbApi, content_type: str, raw_body: bytes) -> 
     return api.import_game_bytes(raw_body)
 
 
-def import_directory_payload(api: ShogiDbApi, raw_body: bytes) -> dict:
-    payload = _decode_json_payload(raw_body)
+class DirectoryImportJobStore:
+    def __init__(self, api: ShogiDbApi) -> None:
+        self.api = api
+        self._jobs: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    def start(self, directory_path: str, recursive: bool) -> dict:
+        job_id = uuid.uuid4().hex
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "path": directory_path,
+            "recursive": recursive,
+            "total": 0,
+            "processed": 0,
+            "imported": 0,
+            "failed": 0,
+            "errors": [],
+            "done": False,
+        }
+        with self._lock:
+            self._jobs[job_id] = job
+        thread = threading.Thread(
+            target=self._run,
+            args=(job_id, directory_path, recursive),
+            daemon=True,
+        )
+        thread.start()
+        return self.get(job_id)
+
+    def get(self, job_id: str) -> dict:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise ApiError(f"Import job not found: {job_id}", 404)
+            return dict(job)
+
+    def _update(self, job_id: str, **changes) -> None:
+        with self._lock:
+            self._jobs[job_id].update(changes)
+
+    def _run(self, job_id: str, directory_path: str, recursive: bool) -> None:
+        self._update(job_id, status="scanning")
+
+        def update_progress(processed: int, total: int) -> None:
+            self._update(
+                job_id,
+                status="running",
+                processed=processed,
+                total=total,
+            )
+
+        try:
+            result = self.api.import_games_from_directory(
+                directory_path,
+                recursive=recursive,
+                progress_callback=update_progress,
+            )
+        except Exception as exc:
+            self._update(
+                job_id,
+                status="failed",
+                errors=[{"path": directory_path, "error": str(exc)}],
+                failed=1,
+                done=True,
+            )
+            return
+
+        self._update(
+            job_id,
+            status="completed",
+            total=result["total"],
+            processed=result["total"],
+            imported=result["imported"],
+            failed=result["failed"],
+            errors=result["errors"],
+            done=True,
+        )
+
+
+def import_directory_payload(api: ShogiDbApi, payload: dict) -> dict:
     directory_path = payload.get("path")
     recursive = payload.get("recursive", False)
     if not isinstance(directory_path, str):
@@ -169,6 +270,19 @@ def import_directory_payload(api: ShogiDbApi, raw_body: bytes) -> dict:
         directory_path,
         recursive=recursive,
     )
+
+
+def start_import_directory_payload(
+    import_jobs: DirectoryImportJobStore,
+    payload: dict,
+) -> dict:
+    directory_path = payload.get("path")
+    recursive = payload.get("recursive", False)
+    if not isinstance(directory_path, str):
+        raise ApiError("Request body must contain string field: path", 400)
+    if not isinstance(recursive, bool):
+        raise ApiError("Request body field recursive must be boolean", 400)
+    return import_jobs.start(directory_path, recursive)
 
 
 def _decode_json_payload(raw_body: bytes) -> dict:

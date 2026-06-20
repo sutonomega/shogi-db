@@ -4,10 +4,17 @@ import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import sleep
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from src.api_server import create_server, import_directory_payload, import_game_payload
+from src.api_server import (
+    DirectoryImportJobStore,
+    create_server,
+    import_directory_payload,
+    import_game_payload,
+    start_import_directory_payload,
+)
 from src.api import ShogiDbApi
 from src.game_repository import GameRepository
 
@@ -143,7 +150,7 @@ class TestImportGamePayload(unittest.TestCase):
 
             response = import_directory_payload(
                 self.api,
-                json.dumps({"path": str(directory), "recursive": False}).encode("utf-8"),
+                {"path": str(directory), "recursive": False},
             )
 
         self.assertEqual(response["total"], 1)
@@ -153,8 +160,29 @@ class TestImportGamePayload(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "path"):
             import_directory_payload(
                 self.api,
-                json.dumps({"recursive": False}).encode("utf-8"),
+                {"recursive": False},
             )
+
+    def test_start_import_directory_payload_tracks_progress(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+            job_store = DirectoryImportJobStore(self.api)
+
+            job = start_import_directory_payload(
+                job_store,
+                {"path": str(directory), "recursive": False},
+            )
+            for _ in range(100):
+                job = job_store.get(job["id"])
+                if job["done"]:
+                    break
+                sleep(0.01)
+
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["processed"], 1)
+        self.assertEqual(job["total"], 1)
+        self.assertEqual(job["imported"], 1)
 
 
 if __name__ == "__main__":
