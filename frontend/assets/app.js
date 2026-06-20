@@ -66,6 +66,9 @@ const evalGraph = document.querySelector("#evalGraph");
 const evalSummary = document.querySelector("#evalSummary");
 const evalGraphStatus = document.querySelector("#evalGraphStatus");
 const svgNamespace = "http://www.w3.org/2000/svg";
+const mateEvalValue = 100000;
+const evalGraphMinScale = 3000;
+const evalGraphScaleStep = 500;
 
 function formatDate(value) {
   if (!value) return "未設定";
@@ -405,6 +408,7 @@ function numericEval(value) {
 function formatEval(value) {
   const evalValue = numericEval(value);
   if (evalValue === null) return "なし";
+  if (isMateEval(evalValue)) return evalValue > 0 ? "+詰み" : "-詰み";
   return evalValue > 0 ? `+${evalValue}` : `${evalValue}`;
 }
 
@@ -418,13 +422,27 @@ function formatEvalWithDelta(index) {
     if (previous !== null) break;
   }
   if (previous === null) return formatEval(current);
+  if (isMateEval(current) || isMateEval(previous)) return formatEval(current);
 
   const delta = current - previous;
   return `${formatEval(current)} (${delta >= 0 ? "+" : ""}${delta})`;
 }
 
-function clippedEval(value) {
-  return Math.max(-1000, Math.min(1000, value));
+function isMateEval(value) {
+  return Math.abs(value) >= mateEvalValue;
+}
+
+function clippedEval(value, scale) {
+  return Math.max(-scale, Math.min(scale, value));
+}
+
+function buildEvalScale(points) {
+  const maxAbsEval = points.reduce((max, point) => {
+    if (point.eval === null || isMateEval(point.eval)) return max;
+    return Math.max(max, Math.abs(point.eval));
+  }, 0);
+  const scaledMax = Math.ceil(maxAbsEval / evalGraphScaleStep) * evalGraphScaleStep;
+  return Math.max(evalGraphMinScale, scaledMax);
 }
 
 function renderEvalGraph() {
@@ -454,18 +472,19 @@ function renderEvalGraph() {
   const graphWidth = width - padding.left - padding.right;
   const graphHeight = height - padding.top - padding.bottom;
   const maxIndex = Math.max(points.length - 1, 1);
+  const evalScale = buildEvalScale(points);
   const xFor = (index) => padding.left + (index / maxIndex) * graphWidth;
-  const yFor = (evalValue) => padding.top + ((1000 - clippedEval(evalValue)) / 2000) * graphHeight;
+  const yFor = (evalValue) => padding.top + ((evalScale - clippedEval(evalValue, evalScale)) / (evalScale * 2)) * graphHeight;
 
-  drawGraphLine(padding.left, yFor(1000), width - padding.right, yFor(1000), "eval-grid");
+  drawGraphLine(padding.left, yFor(evalScale), width - padding.right, yFor(evalScale), "eval-grid");
   drawGraphLine(padding.left, yFor(0), width - padding.right, yFor(0), "eval-zero");
-  drawGraphLine(padding.left, yFor(-1000), width - padding.right, yFor(-1000), "eval-grid");
+  drawGraphLine(padding.left, yFor(-evalScale), width - padding.right, yFor(-evalScale), "eval-grid");
   drawGraphLine(xFor(state.currentMove), padding.top, xFor(state.currentMove), height - padding.bottom, "eval-current");
 
   for (const label of [
-    { text: "+1000", y: yFor(1000) },
+    { text: `+${evalScale}`, y: yFor(evalScale) },
     { text: "0", y: yFor(0) },
-    { text: "-1000", y: yFor(-1000) },
+    { text: `-${evalScale}`, y: yFor(-evalScale) },
   ]) {
     const text = svgElement("text", {
       x: 8,
