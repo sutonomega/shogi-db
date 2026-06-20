@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .api import ApiError, ShogiDbApi
+from .kif_encoding import KifEncodingError
 from .game_repository import GameRepository
 
 
@@ -25,13 +26,11 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            payload = self._read_json()
-            kif_text = payload.get("kif")
-            if not isinstance(kif_text, str):
-                raise ApiError("Request body must contain string field: kif", 400)
-            self._send_json(self.api.import_game(kif_text), 201)
+            self._send_json(self._import_game_from_request(), 201)
         except ApiError as exc:
             self._send_json({"error": exc.message}, exc.status_code)
+        except KifEncodingError as exc:
+            self._send_json({"error": str(exc)}, 400)
         except Exception as exc:
             self._send_json({"error": str(exc)}, 500)
 
@@ -80,13 +79,30 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
-    def _read_json(self) -> dict:
+    def _import_game_from_request(self) -> dict:
+        raw_body = self._read_body()
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.startswith("application/json"):
+            payload = self._read_json(raw_body)
+            kif_text = payload.get("kif")
+            if not isinstance(kif_text, str):
+                raise ApiError("Request body must contain string field: kif", 400)
+            return self.api.import_game(kif_text)
+        return self.api.import_game_bytes(raw_body)
+
+    def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
-        raw_body = self.rfile.read(content_length).decode("utf-8")
-        if not raw_body:
+        return self.rfile.read(content_length)
+
+    def _read_json(self, raw_body: bytes) -> dict:
+        try:
+            raw_text = raw_body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ApiError("JSON body must be UTF-8", 400) from exc
+        if not raw_text:
             return {}
         try:
-            payload = json.loads(raw_body)
+            payload = json.loads(raw_text)
         except json.JSONDecodeError as exc:
             raise ApiError("Invalid JSON body", 400) from exc
         if not isinstance(payload, dict):

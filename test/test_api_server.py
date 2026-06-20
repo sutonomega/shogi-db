@@ -62,6 +62,16 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(len(positions_response["positions"]), 3)
         self.assertEqual(positions_response["positions"][1]["move"], "7g7f")
 
+    def test_import_endpoint_accepts_cp932_kif_body(self):
+        import_response = self._post_bytes(
+            "/api/games/import",
+            KIF_TEXT.encode("cp932"),
+            "application/octet-stream",
+        )
+
+        self.assertEqual(import_response["game"]["black"], "解析太郎")
+        self.assertEqual(import_response["positions_count"], 3)
+
     def test_missing_endpoint_returns_404(self):
         with self.assertRaises(HTTPError) as context:
             self._get_json("/api/missing")
@@ -74,6 +84,16 @@ class TestApiServer(unittest.TestCase):
             f"{self.base_url}{path}",
             data=body,
             headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def _post_bytes(self, path: str, body: bytes, content_type: str) -> dict:
+        request = Request(
+            f"{self.base_url}{path}",
+            data=body,
+            headers={"Content-Type": content_type},
             method="POST",
         )
         with urlopen(request, timeout=5) as response:

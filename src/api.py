@@ -13,6 +13,7 @@ from .game_repository import (
     StoredPosition,
     StrategyStats,
 )
+from .kif_encoding import decode_kif_bytes
 from .kif_parser import KifParser
 from .sfen_generator import SfenGenerator
 from .strategy_detector import StrategyDetector
@@ -49,6 +50,11 @@ class ShogiDbApi:
             "game": self._game_to_dict(self.repository.get_game(game_id)),
             "positions_count": len(positions),
         }
+
+    def import_game_bytes(self, kif_data: bytes) -> dict:
+        if not kif_data.strip():
+            raise ApiError("KIF file is empty", 400)
+        return self.import_game(decode_kif_bytes(kif_data))
 
     def list_games(self) -> dict:
         return {

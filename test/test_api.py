@@ -99,6 +99,18 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertIsNone(response["game"]["enclosure"])
         self.assertEqual(response["positions_count"], 3)
 
+    def test_import_game_bytes_accepts_utf8(self):
+        response = self.api.import_game_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+
+        self.assertEqual(response["game"]["black"], "解析太郎")
+        self.assertEqual(response["game"]["move_count"], 2)
+
+    def test_import_game_bytes_accepts_cp932(self):
+        response = self.api.import_game_bytes(KIF_WITH_ANALYSIS.encode("cp932"))
+
+        self.assertEqual(response["game"]["black"], "解析太郎")
+        self.assertEqual(response["game"]["move_count"], 2)
+
     def test_import_game_detects_strategy(self):
         response = self.api.import_game(SHIKENBISHA_KIF)
 

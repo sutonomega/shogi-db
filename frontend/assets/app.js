@@ -42,6 +42,10 @@ const blunderList = document.querySelector("#blunderList");
 const blunderSummary = document.querySelector("#blunderSummary");
 const summaryText = document.querySelector("#summaryText");
 const searchInput = document.querySelector("#searchInput");
+const importForm = document.querySelector("#importForm");
+const kifFileInput = document.querySelector("#kifFileInput");
+const importFileName = document.querySelector("#importFileName");
+const importButton = document.querySelector("#importButton");
 const refreshButton = document.querySelector("#refreshButton");
 const backButton = document.querySelector("#backButton");
 const pageSubtitle = document.querySelector("#pageSubtitle");
@@ -184,6 +188,12 @@ function renderList() {
     row.appendChild(tableCell(`${game.move_count ?? 0}手`));
     rowsElement.appendChild(row);
   }
+}
+
+function updateImportFileName() {
+  const file = kifFileInput.files?.[0] || null;
+  importFileName.textContent = file ? file.name : "未選択";
+  importButton.disabled = !file;
 }
 
 function renderStrategyStats() {
@@ -648,9 +658,44 @@ async function loadViewer(gameId) {
   }
 }
 
+async function importKifFile(file) {
+  importButton.disabled = true;
+  setStatus("取り込み中");
+  try {
+    const response = await fetch("/api/games/import", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+      body: file,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    kifFileInput.value = "";
+    updateImportFileName();
+    await loadGames();
+    setStatus(`取り込みました: ${payload.game.black} vs ${payload.game.white}`);
+  } catch (error) {
+    setStatus(`KIFを取り込めませんでした: ${error.message}`, "error");
+  } finally {
+    updateImportFileName();
+  }
+}
+
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
   renderList();
+});
+
+kifFileInput.addEventListener("change", updateImportFileName);
+
+importForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const file = kifFileInput.files?.[0] || null;
+  if (!file) return;
+  importKifFile(file);
 });
 
 refreshButton.addEventListener("click", () => {

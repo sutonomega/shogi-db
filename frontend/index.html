@@ -24,6 +24,12 @@
           <span>検索</span>
           <input id="searchInput" type="search" autocomplete="off" placeholder="先手・後手・勝敗" />
         </label>
+        <form class="import-form" id="importForm" aria-label="KIFファイル取込">
+          <input id="kifFileInput" type="file" accept=".kif,text/plain,application/octet-stream" />
+          <label class="file-picker" for="kifFileInput">KIF選択</label>
+          <span id="importFileName">未選択</span>
+          <button id="importButton" type="submit" disabled>取り込み</button>
+        </form>
         <div class="summary" id="summaryText">0局</div>
       </section>
 
