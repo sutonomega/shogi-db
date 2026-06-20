@@ -82,32 +82,11 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     def _import_game_from_request(self) -> dict:
         raw_body = self._read_body()
         content_type = self.headers.get("Content-Type", "")
-        if content_type.startswith("application/json"):
-            payload = self._read_json(raw_body)
-            kif_text = payload.get("kif")
-            if not isinstance(kif_text, str):
-                raise ApiError("Request body must contain string field: kif", 400)
-            return self.api.import_game(kif_text)
-        return self.api.import_game_bytes(raw_body)
+        return import_game_payload(self.api, content_type, raw_body)
 
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
         return self.rfile.read(content_length)
-
-    def _read_json(self, raw_body: bytes) -> dict:
-        try:
-            raw_text = raw_body.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ApiError("JSON body must be UTF-8", 400) from exc
-        if not raw_text:
-            return {}
-        try:
-            payload = json.loads(raw_text)
-        except json.JSONDecodeError as exc:
-            raise ApiError("Invalid JSON body", 400) from exc
-        if not isinstance(payload, dict):
-            raise ApiError("JSON body must be an object", 400)
-        return payload
 
     def _send_json(self, payload: dict, status_code: int) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -155,6 +134,32 @@ def create_server(
     Handler.api = api
     Handler.static_root = root
     return ThreadingHTTPServer((host, port), Handler)
+
+
+def import_game_payload(api: ShogiDbApi, content_type: str, raw_body: bytes) -> dict:
+    if content_type.startswith("application/json"):
+        try:
+            payload = _decode_json_payload(raw_body)
+        except UnicodeDecodeError:
+            return api.import_game_bytes(raw_body)
+        kif_text = payload.get("kif")
+        if not isinstance(kif_text, str):
+            raise ApiError("Request body must contain string field: kif", 400)
+        return api.import_game(kif_text)
+    return api.import_game_bytes(raw_body)
+
+
+def _decode_json_payload(raw_body: bytes) -> dict:
+    raw_text = raw_body.decode("utf-8")
+    if not raw_text:
+        return {}
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ApiError("Invalid JSON body", 400) from exc
+    if not isinstance(payload, dict):
+        raise ApiError("JSON body must be an object", 400)
+    return payload
 
 
 if __name__ == "__main__":
