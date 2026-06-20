@@ -129,6 +129,8 @@ class GameRepository:
 
             CREATE INDEX IF NOT EXISTS idx_positions_game_id
                 ON positions(game_id);
+            CREATE INDEX IF NOT EXISTS idx_positions_game_move_number
+                ON positions(game_id, move_number);
             CREATE INDEX IF NOT EXISTS idx_positions_sfen
                 ON positions(sfen);
 

@@ -56,6 +56,7 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn("renderStrategyStats", content)
         self.assertIn("renderEnclosureStats", content)
         self.assertIn("renderBlunders", content)
+        self.assertIn("loadStats", content)
         self.assertIn("renderStatsList", content)
         self.assertIn("formatPercent", content)
         self.assertIn("parseSfen", content)

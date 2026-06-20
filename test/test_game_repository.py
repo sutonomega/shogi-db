@@ -83,6 +83,16 @@ class TestGameRepository(unittest.TestCase):
         self.assertIsNone(stored.enclosure)
         self.assertEqual(stored.raw_kif, KIF_WITH_ANALYSIS)
 
+    def test_schema_has_position_move_number_index(self):
+        rows = self.repository.connection.execute(
+            "PRAGMA index_list(positions)"
+        ).fetchall()
+
+        self.assertIn(
+            "idx_positions_game_move_number",
+            {row["name"] for row in rows},
+        )
+
     def test_save_strategy(self):
         game_id = self.repository.save_game(
             self.game,

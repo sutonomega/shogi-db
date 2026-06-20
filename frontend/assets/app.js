@@ -616,15 +616,29 @@ async function loadGames() {
   showListView();
   setStatus("読み込み中");
   try {
-    const [gamesResponse, strategyStatsResponse, enclosureStatsResponse, blundersResponse] = await Promise.all([
-      fetch("/api/games"),
+    const gamesResponse = await fetch("/api/games");
+    if (!gamesResponse.ok) {
+      throw new Error(`HTTP ${gamesResponse.status}`);
+    }
+    const payload = await gamesResponse.json();
+    state.games = Array.isArray(payload.games) ? payload.games : [];
+    setStatus("");
+    renderList();
+    loadStats();
+  } catch (error) {
+    state.games = [];
+    setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
+    renderList();
+  }
+}
+
+async function loadStats() {
+  try {
+    const [strategyStatsResponse, enclosureStatsResponse, blundersResponse] = await Promise.all([
       fetch("/api/stats/strategies"),
       fetch("/api/stats/enclosures"),
       fetch("/api/stats/blunders"),
     ]);
-    if (!gamesResponse.ok) {
-      throw new Error(`HTTP ${gamesResponse.status}`);
-    }
     if (!strategyStatsResponse.ok) {
       throw new Error(`HTTP ${strategyStatsResponse.status}`);
     }
@@ -634,29 +648,21 @@ async function loadGames() {
     if (!blundersResponse.ok) {
       throw new Error(`HTTP ${blundersResponse.status}`);
     }
-    const payload = await gamesResponse.json();
     const strategyStatsPayload = await strategyStatsResponse.json();
     const enclosureStatsPayload = await enclosureStatsResponse.json();
     const blundersPayload = await blundersResponse.json();
-    state.games = Array.isArray(payload.games) ? payload.games : [];
     state.strategyStats = Array.isArray(strategyStatsPayload.strategies) ? strategyStatsPayload.strategies : [];
     state.enclosureStats = Array.isArray(enclosureStatsPayload.enclosures) ? enclosureStatsPayload.enclosures : [];
     state.blunders = Array.isArray(blundersPayload.blunders) ? blundersPayload.blunders : [];
-    setStatus("");
-    renderStrategyStats();
-    renderEnclosureStats();
-    renderBlunders();
-    renderList();
   } catch (error) {
-    state.games = [];
     state.strategyStats = [];
     state.enclosureStats = [];
     state.blunders = [];
-    setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
+    setStatus(`統計情報を取得できませんでした: ${error.message}`, "error");
+  } finally {
     renderStrategyStats();
     renderEnclosureStats();
     renderBlunders();
-    renderList();
   }
 }
 
