@@ -84,6 +84,7 @@ const moveFrequencyList = document.querySelector("#moveFrequencyList");
 const moveFrequencySummary = document.querySelector("#moveFrequencySummary");
 const openingList = document.querySelector("#openingList");
 const openingSummary = document.querySelector("#openingSummary");
+const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
 const svgNamespace = "http://www.w3.org/2000/svg";
 const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
@@ -866,6 +867,30 @@ async function loadOpenings() {
   }
 }
 
+async function rebuildOpenings() {
+  rebuildOpeningsButton.disabled = true;
+  setStatus("定跡DBを更新中");
+  try {
+    const response = await fetch("/api/openings/rebuild", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ source: "self" }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    await loadOpenings();
+    setStatus(`定跡DBを更新しました: ${payload.count}件`);
+  } catch (error) {
+    setStatus(`定跡DBを更新できませんでした: ${error.message}`, "error");
+  } finally {
+    rebuildOpeningsButton.disabled = false;
+  }
+}
+
 async function importKifFile(file) {
   importButton.disabled = true;
   setStatus("取り込み中");
@@ -1016,6 +1041,7 @@ directoryImportForm.addEventListener("submit", (event) => {
 });
 
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
+rebuildOpeningsButton.addEventListener("click", rebuildOpenings);
 
 refreshButton.addEventListener("click", () => {
   loadGames();
