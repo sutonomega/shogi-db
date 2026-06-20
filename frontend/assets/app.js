@@ -490,6 +490,7 @@ function renderEvalGraph() {
   drawGraphLine(padding.left, yFor(0), width - padding.right, yFor(0), "eval-zero");
   drawGraphLine(padding.left, yFor(-evalScale), width - padding.right, yFor(-evalScale), "eval-grid");
   drawGraphLine(xFor(state.currentMove), padding.top, xFor(state.currentMove), height - padding.bottom, "eval-current");
+  drawMissingEvalLines(points, xFor, yFor(0));
 
   for (const label of [
     { text: `+${evalScale}`, y: yFor(evalScale) },
@@ -553,6 +554,24 @@ function renderEvalGraph() {
       }
     });
     evalGraph.appendChild(circle);
+  }
+}
+
+function drawMissingEvalLines(points, xFor, y) {
+  let startIndex = null;
+  for (const point of points) {
+    if (point.eval === null) {
+      if (startIndex === null) startIndex = point.index;
+      continue;
+    }
+    if (startIndex !== null && startIndex < point.index) {
+      drawGraphLine(xFor(startIndex), y, xFor(point.index), y, "eval-missing-line");
+    }
+    startIndex = null;
+  }
+  const lastPoint = points[points.length - 1];
+  if (startIndex !== null && lastPoint && startIndex < lastPoint.index) {
+    drawGraphLine(xFor(startIndex), y, xFor(lastPoint.index), y, "eval-missing-line");
   }
 }
 
