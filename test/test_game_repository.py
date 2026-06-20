@@ -83,6 +83,16 @@ class TestGameRepository(unittest.TestCase):
         self.assertIsNone(stored.enclosure)
         self.assertEqual(stored.raw_kif, KIF_WITH_ANALYSIS)
 
+    def test_schema_has_position_move_number_index(self):
+        rows = self.repository.connection.execute(
+            "PRAGMA index_list(positions)"
+        ).fetchall()
+
+        self.assertIn(
+            "idx_positions_game_move_number",
+            {row["name"] for row in rows},
+        )
+
     def test_save_strategy(self):
         game_id = self.repository.save_game(
             self.game,
@@ -220,6 +230,16 @@ class TestGameRepository(unittest.TestCase):
             (game_id,),
         ).fetchone()["count"]
         self.assertEqual(count, len(self.positions))
+
+    def test_list_games_does_not_load_raw_kif_body(self):
+        game_id = self.repository.save_game(self.game, self.positions)
+
+        listed_game = self.repository.list_games()[0]
+        stored_game = self.repository.get_game(game_id)
+
+        self.assertEqual(listed_game.id, game_id)
+        self.assertEqual(listed_game.raw_kif, "")
+        self.assertEqual(stored_game.raw_kif, KIF_WITH_ANALYSIS)
 
     def test_list_opening_aggregates_counts_moves_by_previous_sfen(self):
         start_sfen = "startpos b - 1"

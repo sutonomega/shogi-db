@@ -46,6 +46,11 @@ const importForm = document.querySelector("#importForm");
 const kifFileInput = document.querySelector("#kifFileInput");
 const importFileName = document.querySelector("#importFileName");
 const importButton = document.querySelector("#importButton");
+const directoryImportForm = document.querySelector("#directoryImportForm");
+const directoryPathInput = document.querySelector("#directoryPathInput");
+const recursiveImportInput = document.querySelector("#recursiveImportInput");
+const directoryImportButton = document.querySelector("#directoryImportButton");
+const cancelDirectoryImportButton = document.querySelector("#cancelDirectoryImportButton");
 const refreshButton = document.querySelector("#refreshButton");
 const backButton = document.querySelector("#backButton");
 const pageSubtitle = document.querySelector("#pageSubtitle");
@@ -611,15 +616,29 @@ async function loadGames() {
   showListView();
   setStatus("読み込み中");
   try {
-    const [gamesResponse, strategyStatsResponse, enclosureStatsResponse, blundersResponse] = await Promise.all([
-      fetch("/api/games"),
+    const gamesResponse = await fetch("/api/games");
+    if (!gamesResponse.ok) {
+      throw new Error(`HTTP ${gamesResponse.status}`);
+    }
+    const payload = await gamesResponse.json();
+    state.games = Array.isArray(payload.games) ? payload.games : [];
+    setStatus("");
+    renderList();
+    loadStats();
+  } catch (error) {
+    state.games = [];
+    setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
+    renderList();
+  }
+}
+
+async function loadStats() {
+  try {
+    const [strategyStatsResponse, enclosureStatsResponse, blundersResponse] = await Promise.all([
       fetch("/api/stats/strategies"),
       fetch("/api/stats/enclosures"),
       fetch("/api/stats/blunders"),
     ]);
-    if (!gamesResponse.ok) {
-      throw new Error(`HTTP ${gamesResponse.status}`);
-    }
     if (!strategyStatsResponse.ok) {
       throw new Error(`HTTP ${strategyStatsResponse.status}`);
     }
@@ -629,29 +648,21 @@ async function loadGames() {
     if (!blundersResponse.ok) {
       throw new Error(`HTTP ${blundersResponse.status}`);
     }
-    const payload = await gamesResponse.json();
     const strategyStatsPayload = await strategyStatsResponse.json();
     const enclosureStatsPayload = await enclosureStatsResponse.json();
     const blundersPayload = await blundersResponse.json();
-    state.games = Array.isArray(payload.games) ? payload.games : [];
     state.strategyStats = Array.isArray(strategyStatsPayload.strategies) ? strategyStatsPayload.strategies : [];
     state.enclosureStats = Array.isArray(enclosureStatsPayload.enclosures) ? enclosureStatsPayload.enclosures : [];
     state.blunders = Array.isArray(blundersPayload.blunders) ? blundersPayload.blunders : [];
-    setStatus("");
-    renderStrategyStats();
-    renderEnclosureStats();
-    renderBlunders();
-    renderList();
   } catch (error) {
-    state.games = [];
     state.strategyStats = [];
     state.enclosureStats = [];
     state.blunders = [];
-    setStatus(`対局一覧を取得できませんでした: ${error.message}`, "error");
+    setStatus(`統計情報を取得できませんでした: ${error.message}`, "error");
+  } finally {
     renderStrategyStats();
     renderEnclosureStats();
     renderBlunders();
-    renderList();
   }
 }
 
@@ -703,6 +714,105 @@ async function importKifFile(file) {
   }
 }
 
+async function importKifDirectory(directoryPath, recursive) {
+  directoryImportButton.disabled = true;
+  cancelDirectoryImportButton.hidden = false;
+  cancelDirectoryImportButton.disabled = true;
+  setStatus("一括取り込み中");
+  try {
+    const response = await fetch("/api/games/import-directory", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: directoryPath,
+        recursive,
+        async: true,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    cancelDirectoryImportButton.dataset.jobId = payload.id;
+    cancelDirectoryImportButton.disabled = false;
+    await pollDirectoryImportJob(payload.id);
+  } catch (error) {
+    setStatus(`KIFフォルダを取り込めませんでした: ${error.message}`, "error");
+  } finally {
+    directoryImportButton.disabled = false;
+    cancelDirectoryImportButton.hidden = true;
+    cancelDirectoryImportButton.disabled = false;
+    delete cancelDirectoryImportButton.dataset.jobId;
+  }
+}
+
+async function pollDirectoryImportJob(jobId) {
+  let payload = null;
+  while (true) {
+    const response = await fetch(`/api/games/import-directory/jobs/${jobId}`);
+    payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setDirectoryImportStatus(payload);
+    if (payload.done) break;
+    await wait(500);
+  }
+  await loadGames();
+  if (payload.status === "canceled") {
+    setStatus(`一括取り込みをキャンセルしました: ${payload.processed}/${payload.total}`);
+    return;
+  }
+  const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
+  setStatus(`一括取り込み完了: ${payload.imported} / ${payload.total}件${failedText}`);
+}
+
+function setDirectoryImportStatus(payload) {
+  if (payload.status === "scanning") {
+    setStatus("KIFフォルダをスキャン中");
+    return;
+  }
+  if (payload.status === "failed") {
+    setStatus(`一括取り込み失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
+    return;
+  }
+  if (payload.status === "canceling") {
+    setStatus(`一括取り込みをキャンセル中: ${payload.processed}/${payload.total}`);
+    return;
+  }
+  const total = Number.isFinite(payload.total) ? payload.total : 0;
+  const processed = Number.isFinite(payload.processed) ? payload.processed : 0;
+  setStatus(`一括取り込み中: ${processed}/${total}`);
+}
+
+async function cancelDirectoryImport() {
+  const jobId = cancelDirectoryImportButton.dataset.jobId;
+  if (!jobId) return;
+  cancelDirectoryImportButton.disabled = true;
+  setStatus("一括取り込みをキャンセル中");
+  try {
+    const response = await fetch(`/api/games/import-directory/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setDirectoryImportStatus(payload);
+  } catch (error) {
+    setStatus(`キャンセルできませんでした: ${error.message}`, "error");
+    cancelDirectoryImportButton.disabled = false;
+  }
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 searchInput.addEventListener("input", (event) => {
   state.query = event.target.value;
   renderList();
@@ -716,6 +826,18 @@ importForm.addEventListener("submit", (event) => {
   if (!file) return;
   importKifFile(file);
 });
+
+directoryImportForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const directoryPath = directoryPathInput.value.trim();
+  if (!directoryPath) {
+    setStatus("KIFフォルダのパスを入力してください", "error");
+    return;
+  }
+  importKifDirectory(directoryPath, recursiveImportInput.checked);
+});
+
+cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
 
 refreshButton.addEventListener("click", () => {
   loadGames();

@@ -30,6 +30,15 @@
           <span id="importFileName">未選択</span>
           <button id="importButton" type="submit" disabled>取り込み</button>
         </form>
+        <form class="directory-import-form" id="directoryImportForm" aria-label="KIFフォルダ一括取込">
+          <input id="directoryPathInput" type="text" autocomplete="off" placeholder="/data/share/2mkif" />
+          <label class="checkbox-field">
+            <input id="recursiveImportInput" type="checkbox" />
+            <span>再帰</span>
+          </label>
+          <button id="directoryImportButton" type="submit">一括取込</button>
+          <button id="cancelDirectoryImportButton" type="button" hidden>キャンセル</button>
+        </form>
         <div class="summary" id="summaryText">0局</div>
       </section>
 

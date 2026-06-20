@@ -2,10 +2,20 @@ import json
 import tempfile
 import threading
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from time import sleep
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from src.api_server import create_server, import_game_payload
+from src.api_server import (
+    DirectoryImportJobStore,
+    create_server,
+    import_directory_payload,
+    import_game_payload,
+    is_import_post_path,
+    start_import_directory_payload,
+)
 from src.api import ShogiDbApi
 from src.game_repository import GameRepository
 
@@ -133,6 +143,66 @@ class TestImportGamePayload(unittest.TestCase):
 
         self.assertEqual(response["game"]["black"], "解析太郎")
         self.assertEqual(response["positions_count"], 3)
+
+    def test_import_directory_payload(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+
+            response = import_directory_payload(
+                self.api,
+                {"path": str(directory), "recursive": False},
+            )
+
+        self.assertEqual(response["total"], 1)
+        self.assertEqual(response["imported"], 1)
+
+    def test_import_directory_payload_requires_path(self):
+        with self.assertRaisesRegex(Exception, "path"):
+            import_directory_payload(
+                self.api,
+                {"recursive": False},
+            )
+
+    def test_start_import_directory_payload_tracks_progress(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+            job_store = DirectoryImportJobStore(self.api)
+
+            job = start_import_directory_payload(
+                job_store,
+                {"path": str(directory), "recursive": False},
+            )
+            for _ in range(100):
+                job = job_store.get(job["id"])
+                if job["done"]:
+                    break
+                sleep(0.01)
+
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["processed"], 1)
+        self.assertEqual(job["total"], 1)
+        self.assertEqual(job["imported"], 1)
+
+    def test_import_directory_job_can_be_canceled(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+            job_store = DirectoryImportJobStore(self.api)
+
+            job = job_store.start(str(directory), recursive=False)
+            canceled = job_store.cancel(job["id"])
+
+        self.assertIn(canceled["status"], ("canceling", "completed"))
+
+    def test_import_post_path_accepts_directory_cancel_endpoint(self):
+        self.assertTrue(is_import_post_path("/api/games/import"))
+        self.assertTrue(is_import_post_path("/api/games/import-directory"))
+        self.assertTrue(
+            is_import_post_path("/api/games/import-directory/jobs/job-id/cancel")
+        )
+        self.assertFalse(is_import_post_path("/api/games/import-directory/jobs/job-id"))
 
 
 if __name__ == "__main__":

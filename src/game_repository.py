@@ -129,6 +129,8 @@ class GameRepository:
 
             CREATE INDEX IF NOT EXISTS idx_positions_game_id
                 ON positions(game_id);
+            CREATE INDEX IF NOT EXISTS idx_positions_game_move_number
+                ON positions(game_id, move_number);
             CREATE INDEX IF NOT EXISTS idx_positions_sfen
                 ON positions(sfen);
 
@@ -311,7 +313,7 @@ class GameRepository:
             """
             SELECT
                 id, played_at, black, white, winner, move_count,
-                strategy, enclosure, raw_kif
+                strategy, enclosure
             FROM games
             ORDER BY id DESC
             """
@@ -326,7 +328,7 @@ class GameRepository:
                 move_count=int(row["move_count"]),
                 strategy=row["strategy"],
                 enclosure=row["enclosure"],
-                raw_kif=row["raw_kif"],
+                raw_kif="",
             )
             for row in rows
         ]
