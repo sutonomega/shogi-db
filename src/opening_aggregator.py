@@ -11,3 +11,8 @@ class OpeningAggregator:
 
     def aggregate(self, source: str = "self") -> list[OpeningAggregate]:
         return self.repository.list_opening_aggregates(source=source)
+
+    def rebuild(self, source: str = "self") -> list[OpeningAggregate]:
+        aggregates = self.aggregate(source=source)
+        self.repository.upsert_opening_aggregates(aggregates)
+        return aggregates

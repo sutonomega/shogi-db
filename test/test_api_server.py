@@ -199,6 +199,7 @@ class TestImportGamePayload(unittest.TestCase):
     def test_import_post_path_accepts_directory_cancel_endpoint(self):
         self.assertTrue(is_import_post_path("/api/games/import"))
         self.assertTrue(is_import_post_path("/api/games/import-directory"))
+        self.assertTrue(is_import_post_path("/api/openings/rebuild"))
         self.assertTrue(
             is_import_post_path("/api/games/import-directory/jobs/job-id/cancel")
         )

@@ -120,7 +120,7 @@ SFEN を局面の共通キーにすることで、棋譜ビューア、戦法・
   - 局面ごとの最頻手・評価値の分布を可視化
   - SFEN ごとに「よく指した手」「出現回数」「平均評価値」を確認
 
-- [ ] **定跡 DB 生成** (#16)
+- [x] **定跡 DB 生成** (#16)
   - 集計結果を `openings` テーブルへ UPSERT
   - `openings.source` で self / yaneou / professional / floodgate などの由来を分ける
   - 外部定跡 DB は SFEN 列へ変換できる場合に取り込み可能にする
