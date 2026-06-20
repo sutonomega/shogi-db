@@ -519,9 +519,9 @@ input {
 }
 
 .eval-point {
-  fill: #1f6f8b;
-  stroke: var(--surface);
-  stroke-width: 1.5;
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 0;
   cursor: pointer;
 }
 
@@ -531,8 +531,15 @@ input {
   stroke-width: 2;
 }
 
+.eval-point:hover {
+  fill: #1f6f8b;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
 .eval-point:focus {
   outline: none;
+  fill: #1f6f8b;
   stroke: #163f2d;
   stroke-width: 3;
 }
