@@ -11,12 +11,14 @@ from .game_repository import (
     EnclosureStats,
     GameRepository,
     MoveFrequency,
+    OpeningAggregate,
     StoredGame,
     StoredPosition,
     StrategyStats,
 )
 from .kif_encoding import decode_kif_bytes
 from .kif_parser import KifParser
+from .opening_aggregator import OpeningAggregator
 from .sfen_generator import SfenGenerator
 from .strategy_detector import StrategyDetector
 
@@ -186,6 +188,19 @@ class ShogiDbApi:
             ],
         }
 
+    def rebuild_openings(self, source: str = "self") -> dict:
+        if not source.strip():
+            raise ApiError("Opening source is empty", 400)
+        openings = OpeningAggregator(self.repository).rebuild(source=source)
+        return {
+            "source": source,
+            "count": len(openings),
+            "openings": [
+                self._opening_to_dict(opening)
+                for opening in openings
+            ],
+        }
+
     def _game_to_dict(self, game: StoredGame | None) -> dict:
         if game is None:
             raise ApiError("Saved game could not be loaded", 500)
@@ -259,4 +274,13 @@ class ShogiDbApi:
             "count": frequency.count,
             "ratio": frequency.count / total if total else None,
             "avg_eval": frequency.avg_eval,
+        }
+
+    def _opening_to_dict(self, opening: OpeningAggregate) -> dict:
+        return {
+            "source": opening.source,
+            "sfen": opening.sfen,
+            "move": opening.move,
+            "count": opening.count,
+            "avg_eval": opening.avg_eval,
         }

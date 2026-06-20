@@ -59,6 +59,33 @@ class TestOpeningAggregator(unittest.TestCase):
         self.assertEqual(aggregates[0].count, 1)
         self.assertEqual(aggregates[0].avg_eval, 100)
 
+    def test_rebuild_saves_opening_moves(self):
+        game = GameRecord(
+            played_at=None,
+            black="A",
+            white="B",
+            winner=None,
+            move_count=1,
+            moves=[],
+            raw_kif="raw",
+        )
+        self.repository.save_game(
+            game,
+            [
+                position(0, "start", None, None),
+                position(1, "after", "7g7f", 100),
+            ],
+        )
+
+        aggregates = self.aggregator.rebuild()
+        openings = self.repository.list_openings(source="self", sfen="start")
+
+        self.assertEqual(len(aggregates), 1)
+        self.assertEqual(len(openings), 1)
+        self.assertEqual(openings[0].move, "7g7f")
+        self.assertEqual(openings[0].count, 1)
+        self.assertEqual(openings[0].avg_eval, 100)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

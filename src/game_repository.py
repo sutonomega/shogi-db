@@ -499,6 +499,68 @@ class GameRepository:
             for row in rows
         ]
 
+    def upsert_opening_aggregates(
+        self,
+        aggregates: list[OpeningAggregate],
+    ) -> int:
+        with self.connection:
+            self.connection.executemany(
+                """
+                INSERT INTO openings (
+                    source, sfen, move, count, avg_eval, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(source, sfen, move) DO UPDATE SET
+                    count = excluded.count,
+                    avg_eval = excluded.avg_eval,
+                    updated_at = datetime('now')
+                """,
+                [
+                    (
+                        aggregate.source,
+                        aggregate.sfen,
+                        aggregate.move,
+                        aggregate.count,
+                        aggregate.avg_eval,
+                    )
+                    for aggregate in aggregates
+                ],
+            )
+        return len(aggregates)
+
+    def list_openings(
+        self,
+        *,
+        source: str = "self",
+        sfen: str | None = None,
+    ) -> list[OpeningAggregate]:
+        parameters: list[str] = [source]
+        where_clause = "WHERE source = ?"
+        if sfen is not None:
+            where_clause += " AND sfen = ?"
+            parameters.append(sfen)
+
+        rows = self.connection.execute(
+            f"""
+            SELECT
+                source, sfen, move, count, avg_eval
+            FROM openings
+            {where_clause}
+            ORDER BY count DESC, sfen ASC, move ASC
+            """,
+            parameters,
+        ).fetchall()
+        return [
+            OpeningAggregate(
+                source=row["source"],
+                sfen=row["sfen"],
+                move=row["move"],
+                count=int(row["count"]),
+                avg_eval=int(row["avg_eval"]) if row["avg_eval"] is not None else None,
+            )
+            for row in rows
+        ]
+
     def list_move_frequencies(self, sfen: str) -> list[MoveFrequency]:
         rows = self.connection.execute(
             """

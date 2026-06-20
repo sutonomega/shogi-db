@@ -2,7 +2,7 @@ import json
 import unittest
 from dataclasses import replace
 
-from src.game_repository import GameRepository
+from src.game_repository import GameRepository, OpeningAggregate
 from src.kif_parser import KifParser
 from src.sfen_generator import PositionRecord, SfenGenerator
 
@@ -322,6 +322,36 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(frequencies[1].move, "2g2f")
         self.assertEqual(frequencies[1].count, 1)
         self.assertIsNone(frequencies[1].avg_eval)
+
+    def test_upsert_opening_aggregates_saves_and_updates_openings(self):
+        self.repository.upsert_opening_aggregates([
+            OpeningAggregate(
+                source="self",
+                sfen="startpos b - 1",
+                move="7g7f",
+                count=1,
+                avg_eval=100,
+            )
+        ])
+        self.repository.upsert_opening_aggregates([
+            OpeningAggregate(
+                source="self",
+                sfen="startpos b - 1",
+                move="7g7f",
+                count=3,
+                avg_eval=150,
+            )
+        ])
+
+        openings = self.repository.list_openings(
+            source="self",
+            sfen="startpos b - 1",
+        )
+
+        self.assertEqual(len(openings), 1)
+        self.assertEqual(openings[0].move, "7g7f")
+        self.assertEqual(openings[0].count, 3)
+        self.assertEqual(openings[0].avg_eval, 150)
 
 
 if __name__ == "__main__":

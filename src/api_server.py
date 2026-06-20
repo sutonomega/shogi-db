@@ -30,6 +30,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
+            if path == "/api/openings/rebuild":
+                self._send_json(self._rebuild_openings_from_request(), 200)
+                return
+
             parts = path.strip("/").split("/")
             if (
                 len(parts) == 6
@@ -132,6 +136,14 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             return start_import_directory_payload(self.import_jobs, payload), 202
         return import_directory_payload(self.api, payload), 201
 
+    def _rebuild_openings_from_request(self) -> dict:
+        raw_body = self._read_body()
+        payload = _decode_json_payload(raw_body)
+        source = payload.get("source", "self")
+        if not isinstance(source, str):
+            raise ApiError("Request body field source must be string", 400)
+        return self.api.rebuild_openings(source=source)
+
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
         return self.rfile.read(content_length)
@@ -199,7 +211,11 @@ def import_game_payload(api: ShogiDbApi, content_type: str, raw_body: bytes) -> 
 
 
 def is_import_post_path(path: str) -> bool:
-    if path in ("/api/games/import", "/api/games/import-directory"):
+    if path in (
+        "/api/games/import",
+        "/api/games/import-directory",
+        "/api/openings/rebuild",
+    ):
         return True
     parts = path.strip("/").split("/")
     return (
