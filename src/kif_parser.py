@@ -92,7 +92,7 @@ class KifParser:
     _RE_TSUMI    = re.compile(r"^\s*\d+\s+詰み")
 
     # 水匠解析コメント
-    _RE_ANALYSIS_HEADER = re.compile(r"^\*\*解析\s+\d+")
+    _RE_ANALYSIS_HEADER = re.compile(r"^\*\*(?:解析\s+\d+|対局\b)")
     _RE_INLINE_ANALYSIS = re.compile(
         r"評価値\s+([+\-]?\d+|[+\-]?詰\s*\d*)"
         r"(?:\s+読み筋\s+(.+))?"
