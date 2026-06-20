@@ -13,6 +13,7 @@ from src.api_server import (
     create_server,
     import_directory_payload,
     import_game_payload,
+    is_import_post_path,
     start_import_directory_payload,
 )
 from src.api import ShogiDbApi
@@ -194,6 +195,14 @@ class TestImportGamePayload(unittest.TestCase):
             canceled = job_store.cancel(job["id"])
 
         self.assertIn(canceled["status"], ("canceling", "completed"))
+
+    def test_import_post_path_accepts_directory_cancel_endpoint(self):
+        self.assertTrue(is_import_post_path("/api/games/import"))
+        self.assertTrue(is_import_post_path("/api/games/import-directory"))
+        self.assertTrue(
+            is_import_post_path("/api/games/import-directory/jobs/job-id/cancel")
+        )
+        self.assertFalse(is_import_post_path("/api/games/import-directory/jobs/job-id"))
 
 
 if __name__ == "__main__":

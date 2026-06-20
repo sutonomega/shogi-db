@@ -25,7 +25,7 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in ("/api/games/import", "/api/games/import-directory"):
+        if not is_import_post_path(path):
             self._send_json({"error": "Not found"}, 404)
             return
 
@@ -189,6 +189,20 @@ def import_game_payload(api: ShogiDbApi, content_type: str, raw_body: bytes) -> 
             raise ApiError("Request body must contain string field: kif", 400)
         return api.import_game(kif_text)
     return api.import_game_bytes(raw_body)
+
+
+def is_import_post_path(path: str) -> bool:
+    if path in ("/api/games/import", "/api/games/import-directory"):
+        return True
+    parts = path.strip("/").split("/")
+    return (
+        len(parts) == 6
+        and parts[0] == "api"
+        and parts[1] == "games"
+        and parts[2] == "import-directory"
+        and parts[3] == "jobs"
+        and parts[5] == "cancel"
+    )
 
 
 class DirectoryImportJobStore:
