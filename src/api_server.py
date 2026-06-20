@@ -30,6 +30,18 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
+            parts = path.strip("/").split("/")
+            if (
+                len(parts) == 6
+                and parts[0] == "api"
+                and parts[1] == "games"
+                and parts[2] == "import-directory"
+                and parts[3] == "jobs"
+                and parts[5] == "cancel"
+            ):
+                self._send_json(self.import_jobs.cancel(parts[4]), 200)
+                return
+
             if path == "/api/games/import-directory":
                 payload, status_code = self._import_directory_from_request()
                 self._send_json(payload, status_code)
@@ -197,6 +209,7 @@ class DirectoryImportJobStore:
             "imported": 0,
             "failed": 0,
             "errors": [],
+            "cancel_requested": False,
             "done": False,
         }
         with self._lock:
@@ -216,6 +229,16 @@ class DirectoryImportJobStore:
                 raise ApiError(f"Import job not found: {job_id}", 404)
             return dict(job)
 
+    def cancel(self, job_id: str) -> dict:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise ApiError(f"Import job not found: {job_id}", 404)
+            if not job["done"]:
+                job["cancel_requested"] = True
+                job["status"] = "canceling"
+            return dict(job)
+
     def _update(self, job_id: str, **changes) -> None:
         with self._lock:
             self._jobs[job_id].update(changes)
@@ -224,9 +247,13 @@ class DirectoryImportJobStore:
         self._update(job_id, status="scanning")
 
         def update_progress(processed: int, total: int) -> None:
+            if self._is_cancel_requested(job_id):
+                status = "canceling"
+            else:
+                status = "running"
             self._update(
                 job_id,
-                status="running",
+                status=status,
                 processed=processed,
                 total=total,
             )
@@ -236,6 +263,7 @@ class DirectoryImportJobStore:
                 directory_path,
                 recursive=recursive,
                 progress_callback=update_progress,
+                should_cancel=lambda: self._is_cancel_requested(job_id),
             )
         except Exception as exc:
             self._update(
@@ -247,16 +275,31 @@ class DirectoryImportJobStore:
             )
             return
 
-        self._update(
-            job_id,
-            status="completed",
-            total=result["total"],
-            processed=result["total"],
-            imported=result["imported"],
-            failed=result["failed"],
-            errors=result["errors"],
-            done=True,
-        )
+        if self._is_cancel_requested(job_id):
+            self._update(
+                job_id,
+                status="canceled",
+                total=result["total"],
+                imported=result["imported"],
+                failed=result["failed"],
+                errors=result["errors"],
+                done=True,
+            )
+        else:
+            self._update(
+                job_id,
+                status="completed",
+                total=result["total"],
+                processed=result["total"],
+                imported=result["imported"],
+                failed=result["failed"],
+                errors=result["errors"],
+                done=True,
+            )
+
+    def _is_cancel_requested(self, job_id: str) -> bool:
+        with self._lock:
+            return bool(self._jobs[job_id]["cancel_requested"])
 
 
 def import_directory_payload(api: ShogiDbApi, payload: dict) -> dict:

@@ -50,6 +50,7 @@ const directoryImportForm = document.querySelector("#directoryImportForm");
 const directoryPathInput = document.querySelector("#directoryPathInput");
 const recursiveImportInput = document.querySelector("#recursiveImportInput");
 const directoryImportButton = document.querySelector("#directoryImportButton");
+const cancelDirectoryImportButton = document.querySelector("#cancelDirectoryImportButton");
 const refreshButton = document.querySelector("#refreshButton");
 const backButton = document.querySelector("#backButton");
 const pageSubtitle = document.querySelector("#pageSubtitle");
@@ -709,6 +710,8 @@ async function importKifFile(file) {
 
 async function importKifDirectory(directoryPath, recursive) {
   directoryImportButton.disabled = true;
+  cancelDirectoryImportButton.hidden = false;
+  cancelDirectoryImportButton.disabled = true;
   setStatus("一括取り込み中");
   try {
     const response = await fetch("/api/games/import-directory", {
@@ -726,11 +729,16 @@ async function importKifDirectory(directoryPath, recursive) {
     if (!response.ok) {
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
+    cancelDirectoryImportButton.dataset.jobId = payload.id;
+    cancelDirectoryImportButton.disabled = false;
     await pollDirectoryImportJob(payload.id);
   } catch (error) {
     setStatus(`KIFフォルダを取り込めませんでした: ${error.message}`, "error");
   } finally {
     directoryImportButton.disabled = false;
+    cancelDirectoryImportButton.hidden = true;
+    cancelDirectoryImportButton.disabled = false;
+    delete cancelDirectoryImportButton.dataset.jobId;
   }
 }
 
@@ -747,6 +755,10 @@ async function pollDirectoryImportJob(jobId) {
     await wait(500);
   }
   await loadGames();
+  if (payload.status === "canceled") {
+    setStatus(`一括取り込みをキャンセルしました: ${payload.processed}/${payload.total}`);
+    return;
+  }
   const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
   setStatus(`一括取り込み完了: ${payload.imported} / ${payload.total}件${failedText}`);
 }
@@ -760,9 +772,33 @@ function setDirectoryImportStatus(payload) {
     setStatus(`一括取り込み失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
     return;
   }
+  if (payload.status === "canceling") {
+    setStatus(`一括取り込みをキャンセル中: ${payload.processed}/${payload.total}`);
+    return;
+  }
   const total = Number.isFinite(payload.total) ? payload.total : 0;
   const processed = Number.isFinite(payload.processed) ? payload.processed : 0;
   setStatus(`一括取り込み中: ${processed}/${total}`);
+}
+
+async function cancelDirectoryImport() {
+  const jobId = cancelDirectoryImportButton.dataset.jobId;
+  if (!jobId) return;
+  cancelDirectoryImportButton.disabled = true;
+  setStatus("一括取り込みをキャンセル中");
+  try {
+    const response = await fetch(`/api/games/import-directory/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setDirectoryImportStatus(payload);
+  } catch (error) {
+    setStatus(`キャンセルできませんでした: ${error.message}`, "error");
+    cancelDirectoryImportButton.disabled = false;
+  }
 }
 
 function wait(ms) {
@@ -794,6 +830,8 @@ directoryImportForm.addEventListener("submit", (event) => {
   }
   importKifDirectory(directoryPath, recursiveImportInput.checked);
 });
+
+cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
 
 refreshButton.addEventListener("click", () => {
   loadGames();

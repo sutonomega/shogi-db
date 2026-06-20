@@ -114,7 +114,7 @@ input {
 }
 
 .directory-import-form {
-  grid-template-columns: minmax(180px, 260px) auto auto;
+  grid-template-columns: minmax(180px, 260px) auto auto auto;
 }
 
 .import-form input[type="file"] {

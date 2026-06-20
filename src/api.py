@@ -63,6 +63,7 @@ class ShogiDbApi:
         *,
         recursive: bool = False,
         progress_callback=None,
+        should_cancel=None,
     ) -> dict:
         if not directory_path.strip():
             raise ApiError("Directory path is empty", 400)
@@ -79,6 +80,8 @@ class ShogiDbApi:
             progress_callback(processed, total)
 
         for file_path in self._iter_kif_files(directory, recursive=recursive):
+            if should_cancel is not None and should_cancel():
+                break
             try:
                 response = self.import_game_bytes(file_path.read_bytes())
             except Exception as exc:

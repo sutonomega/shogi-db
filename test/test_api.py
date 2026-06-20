@@ -144,6 +144,22 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(progress[0], (0, 2))
         self.assertEqual(progress[-1], (2, 2))
 
+    def test_import_games_from_directory_can_cancel(self):
+        calls = []
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "first.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "second.kif").write_bytes(SHIKENBISHA_KIF.encode("utf-8"))
+
+            response = self.api.import_games_from_directory(
+                str(directory),
+                progress_callback=lambda processed, total: calls.append((processed, total)),
+                should_cancel=lambda: bool(calls),
+            )
+
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 0)
+
     def test_import_games_from_directory_continues_after_error(self):
         with TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)

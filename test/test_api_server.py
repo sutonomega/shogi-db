@@ -184,6 +184,17 @@ class TestImportGamePayload(unittest.TestCase):
         self.assertEqual(job["total"], 1)
         self.assertEqual(job["imported"], 1)
 
+    def test_import_directory_job_can_be_canceled(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+            job_store = DirectoryImportJobStore(self.api)
+
+            job = job_store.start(str(directory), recursive=False)
+            canceled = job_store.cancel(job["id"])
+
+        self.assertIn(canceled["status"], ("canceling", "completed"))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
