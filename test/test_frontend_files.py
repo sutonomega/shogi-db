@@ -41,6 +41,7 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn('"Content-Type": "application/octet-stream"', content)
         self.assertIn("importKifFile", content)
         self.assertIn("kifFileInput.addEventListener", content)
+        self.assertIn('window.location.href = `/games/${payload.game.id}`', content)
         self.assertIn("renderStrategyStats", content)
         self.assertIn("renderEnclosureStats", content)
         self.assertIn("renderBlunders", content)

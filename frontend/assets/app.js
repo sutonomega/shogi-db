@@ -675,8 +675,7 @@ async function importKifFile(file) {
     }
     kifFileInput.value = "";
     updateImportFileName();
-    await loadGames();
-    setStatus(`取り込みました: ${payload.game.black} vs ${payload.game.white}`);
+    window.location.href = `/games/${payload.game.id}`;
   } catch (error) {
     setStatus(`KIFを取り込めませんでした: ${error.message}`, "error");
   } finally {
