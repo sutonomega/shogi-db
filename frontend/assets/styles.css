@@ -527,6 +527,64 @@ input {
   display: none;
 }
 
+.move-frequency-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+
+.move-frequency-list {
+  display: grid;
+  gap: 8px;
+}
+
+.move-frequency-item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.move-frequency-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.move-frequency-heading strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-frequency-heading span,
+.move-frequency-item small {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.move-frequency-bar {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.move-frequency-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
 .eval-grid {
   stroke: #dfe5ea;
   stroke-width: 1;

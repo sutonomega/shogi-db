@@ -10,6 +10,7 @@ from .game_repository import (
     BlunderRecord,
     EnclosureStats,
     GameRepository,
+    MoveFrequency,
     StoredGame,
     StoredPosition,
     StrategyStats,
@@ -171,6 +172,20 @@ class ShogiDbApi:
             ]
         }
 
+    def get_position_frequency(self, sfen: str) -> dict:
+        if not sfen.strip():
+            raise ApiError("SFEN is empty", 400)
+        frequencies = self.repository.list_move_frequencies(sfen)
+        total = sum(frequency.count for frequency in frequencies)
+        return {
+            "sfen": sfen,
+            "total": total,
+            "moves": [
+                self._move_frequency_to_dict(frequency, total)
+                for frequency in frequencies
+            ],
+        }
+
     def _game_to_dict(self, game: StoredGame | None) -> dict:
         if game is None:
             raise ApiError("Saved game could not be loaded", 500)
@@ -232,4 +247,16 @@ class ShogiDbApi:
             "eval_after": record.eval_after,
             "eval_delta": record.eval_delta,
             "loss": record.loss,
+        }
+
+    def _move_frequency_to_dict(
+        self,
+        frequency: MoveFrequency,
+        total: int,
+    ) -> dict:
+        return {
+            "move": frequency.move,
+            "count": frequency.count,
+            "ratio": frequency.count / total if total else None,
+            "avg_eval": frequency.avg_eval,
         }

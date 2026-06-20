@@ -289,6 +289,40 @@ class TestGameRepository(unittest.TestCase):
 
         self.assertEqual(aggregates[0].source, "professional")
 
+    def test_list_move_frequencies_returns_moves_for_position(self):
+        start_sfen = "startpos b - 1"
+        first_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, "after 7g7f w - 2", "7g7f", 100),
+        ]
+        second_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, "after 7g7f w - 2", "7g7f", 200),
+        ]
+        third_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, "after 2g2f w - 2", "2g2f", None),
+        ]
+
+        self.repository.save_game(self.game, first_positions)
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#2"),
+            second_positions,
+        )
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#3"),
+            third_positions,
+        )
+
+        frequencies = self.repository.list_move_frequencies(start_sfen)
+
+        self.assertEqual(frequencies[0].move, "7g7f")
+        self.assertEqual(frequencies[0].count, 2)
+        self.assertEqual(frequencies[0].avg_eval, 150)
+        self.assertEqual(frequencies[1].move, "2g2f")
+        self.assertEqual(frequencies[1].count, 1)
+        self.assertIsNone(frequencies[1].avg_eval)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
