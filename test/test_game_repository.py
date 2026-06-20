@@ -93,6 +93,15 @@ class TestGameRepository(unittest.TestCase):
             {row["name"] for row in rows},
         )
 
+    def test_schema_has_engine_analysis_columns(self):
+        rows = self.repository.connection.execute(
+            "PRAGMA table_info(positions)"
+        ).fetchall()
+
+        self.assertIn("analyzed_at", {row["name"] for row in rows})
+        self.assertIn("engine_name", {row["name"] for row in rows})
+        self.assertIn("engine_depth", {row["name"] for row in rows})
+
     def test_save_strategy(self):
         game_id = self.repository.save_game(
             self.game,
@@ -177,6 +186,7 @@ class TestGameRepository(unittest.TestCase):
         stored_positions = self.repository.list_positions(game_id)
 
         self.assertEqual(len(stored_positions), 4)
+        self.assertIsInstance(stored_positions[0].id, int)
         self.assertEqual(stored_positions[0].move_number, 0)
         self.assertEqual(stored_positions[0].move, None)
         self.assertEqual(
@@ -195,6 +205,28 @@ class TestGameRepository(unittest.TestCase):
                 {"move": "6i7h", "eval": 40},
             ],
         )
+
+    def test_update_position_analysis(self):
+        game_id = self.repository.save_game(self.game, self.positions)
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        stored = self.repository.update_position_analysis(
+            position_id,
+            eval_value=103,
+            best_move="2g2f",
+            pv="2g2f 8c8d",
+            candidates=[{"move": "2g2f", "eval": 103}],
+            engine_name="Suisho5",
+            engine_depth=10,
+        )
+
+        self.assertEqual(stored.eval, 103)
+        self.assertEqual(stored.best_move, "2g2f")
+        self.assertEqual(stored.pv, "2g2f 8c8d")
+        self.assertEqual(json.loads(stored.candidates), [{"move": "2g2f", "eval": 103}])
+        self.assertEqual(stored.engine_name, "Suisho5")
+        self.assertEqual(stored.engine_depth, 10)
+        self.assertIsNotNone(stored.analyzed_at)
 
     def test_duplicate_raw_kif_returns_existing_game_id(self):
         first_id = self.repository.save_game(self.game, self.positions)

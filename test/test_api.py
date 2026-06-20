@@ -1,9 +1,11 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from src.api import ApiError, ShogiDbApi
 from src.game_repository import GameRepository
+from src.usi_engine import EngineAnalysis
 
 
 KIF_WITH_ANALYSIS = """\
@@ -331,6 +333,45 @@ class TestShogiDbApi(unittest.TestCase):
                 {"move": "6i7h", "eval": 40},
             ],
         )
+
+    def test_analyze_position(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        with patch("src.api.UsiEngineAnalyzer") as analyzer_class:
+            analyzer_class.return_value.analyze_sfen.return_value = EngineAnalysis(
+                eval=103,
+                best_move="2g2f",
+                pv="2g2f 8c8d",
+                candidates=[{"move": "2g2f", "eval": 103}],
+                engine_name="Suisho5",
+                engine_depth=10,
+            )
+
+            response = self.api.analyze_position(
+                position_id,
+                engine_path="/path/to/Suisho5",
+                depth=10,
+            )
+
+        position = response["position"]
+        self.assertEqual(position["id"], position_id)
+        self.assertEqual(position["eval"], 103)
+        self.assertEqual(position["best_move"], "2g2f")
+        self.assertEqual(position["pv"], "2g2f 8c8d")
+        self.assertEqual(position["candidates"], [{"move": "2g2f", "eval": 103}])
+        self.assertEqual(position["engine_name"], "Suisho5")
+        self.assertEqual(position["engine_depth"], 10)
+        self.assertIsNotNone(position["analyzed_at"])
+
+    def test_analyze_position_requires_engine_path(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        with self.assertRaises(ApiError) as context:
+            self.api.analyze_position(position_id, engine_path=None)
+
+        self.assertEqual(context.exception.status_code, 400)
 
     def test_empty_import_raises_api_error(self):
         with self.assertRaises(ApiError) as context:

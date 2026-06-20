@@ -30,11 +30,20 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
+            parts = path.strip("/").split("/")
+            if (
+                len(parts) == 4
+                and parts[0] == "api"
+                and parts[1] == "positions"
+                and parts[3] == "analyze"
+            ):
+                self._send_json(self._analyze_position_from_request(int(parts[2])), 200)
+                return
+
             if path == "/api/openings/rebuild":
                 self._send_json(self._rebuild_openings_from_request(), 200)
                 return
 
-            parts = path.strip("/").split("/")
             if (
                 len(parts) == 6
                 and parts[0] == "api"
@@ -151,6 +160,25 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             raise ApiError("Request body field source must be string", 400)
         return self.api.rebuild_openings(source=source)
 
+    def _analyze_position_from_request(self, position_id: int) -> dict:
+        raw_body = self._read_body()
+        payload = _decode_json_payload(raw_body)
+        engine_path = payload.get("engine_path")
+        engine_name = payload.get("engine_name")
+        depth = payload.get("depth", 18)
+        if engine_path is not None and not isinstance(engine_path, str):
+            raise ApiError("Request body field engine_path must be string", 400)
+        if engine_name is not None and not isinstance(engine_name, str):
+            raise ApiError("Request body field engine_name must be string", 400)
+        if not isinstance(depth, int):
+            raise ApiError("Request body field depth must be integer", 400)
+        return self.api.analyze_position(
+            position_id,
+            engine_path=engine_path,
+            engine_name=engine_name,
+            depth=depth,
+        )
+
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
         return self.rfile.read(content_length)
@@ -225,6 +253,13 @@ def is_import_post_path(path: str) -> bool:
     ):
         return True
     parts = path.strip("/").split("/")
+    if (
+        len(parts) == 4
+        and parts[0] == "api"
+        and parts[1] == "positions"
+        and parts[3] == "analyze"
+    ):
+        return True
     return (
         len(parts) == 6
         and parts[0] == "api"
