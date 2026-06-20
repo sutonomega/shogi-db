@@ -6,6 +6,7 @@ import json
 
 from .enclosure_detector import EnclosureDetector
 from .game_repository import (
+    BlunderRecord,
     EnclosureStats,
     GameRepository,
     StoredGame,
@@ -86,6 +87,14 @@ class ShogiDbApi:
             ]
         }
 
+    def get_blunders(self) -> dict:
+        return {
+            "blunders": [
+                self._blunder_to_dict(record)
+                for record in self.repository.list_blunders()
+            ]
+        }
+
     def _game_to_dict(self, game: StoredGame | None) -> dict:
         if game is None:
             raise ApiError("Saved game could not be loaded", 500)
@@ -134,4 +143,17 @@ class ShogiDbApi:
             "losses": stats.losses,
             "draws": stats.draws,
             "win_rate": stats.win_rate,
+        }
+
+    def _blunder_to_dict(self, record: BlunderRecord) -> dict:
+        return {
+            "game_id": record.game_id,
+            "move_number": record.move_number,
+            "move": record.move,
+            "black": record.black,
+            "white": record.white,
+            "eval_before": record.eval_before,
+            "eval_after": record.eval_after,
+            "eval_delta": record.eval_delta,
+            "loss": record.loss,
         }

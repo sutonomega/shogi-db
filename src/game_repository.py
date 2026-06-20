@@ -67,6 +67,19 @@ class EnclosureStats:
         return self.wins / decisive_games
 
 
+@dataclass
+class BlunderRecord:
+    game_id: int
+    move_number: int
+    move: str
+    black: str
+    white: str
+    eval_before: int
+    eval_after: int
+    eval_delta: int
+    loss: int
+
+
 class GameRepository:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
@@ -304,6 +317,58 @@ class GameRepository:
                 wins=int(row["wins"]),
                 losses=int(row["losses"]),
                 draws=int(row["draws"]),
+            )
+            for row in rows
+        ]
+
+    def list_blunders(self, limit: int = 20) -> list[BlunderRecord]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                games.id AS game_id,
+                games.black AS black,
+                games.white AS white,
+                current.move_number AS move_number,
+                current.move AS move,
+                previous.eval AS eval_before,
+                current.eval AS eval_after,
+                CASE
+                    WHEN current.move_number % 2 = 1
+                    THEN current.eval - previous.eval
+                    ELSE previous.eval - current.eval
+                END AS eval_delta
+            FROM positions AS current
+            JOIN positions AS previous
+                ON previous.game_id = current.game_id
+                AND previous.move_number = current.move_number - 1
+            JOIN games
+                ON games.id = current.game_id
+            WHERE current.eval IS NOT NULL
+                AND previous.eval IS NOT NULL
+                AND current.move IS NOT NULL
+                AND (
+                    CASE
+                        WHEN current.move_number % 2 = 1
+                        THEN current.eval - previous.eval
+                        ELSE previous.eval - current.eval
+                    END
+                ) < 0
+            ORDER BY eval_delta ASC, current.move_number ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [
+            BlunderRecord(
+                game_id=int(row["game_id"]),
+                move_number=int(row["move_number"]),
+                move=row["move"],
+                black=row["black"],
+                white=row["white"],
+                eval_before=int(row["eval_before"]),
+                eval_after=int(row["eval_after"]),
+                eval_delta=int(row["eval_delta"]),
+                loss=abs(int(row["eval_delta"])),
             )
             for row in rows
         ]
