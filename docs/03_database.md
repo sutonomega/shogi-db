@@ -125,7 +125,7 @@ MVP では `self` のみを扱い、外部 source は Phase 3 以降で取り込
 ```
 games / positions テーブルの蓄積データ
     ↓
-sfen ごとに指し手を集計
+直前局面の sfen と次の指し手 move ごとに集計
     ↓
 source='self' の count・avg_eval を更新（UPSERT）
     ↓

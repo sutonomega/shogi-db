@@ -42,6 +42,23 @@ def position(move_number: int, move: str | None, eval_value: int | None) -> Posi
     )
 
 
+def opening_position(
+    move_number: int,
+    sfen: str,
+    move: str | None,
+    eval_value: int | None,
+) -> PositionRecord:
+    return PositionRecord(
+        move_number=move_number,
+        sfen=sfen,
+        move_usi=move,
+        eval=eval_value,
+        best_move=None,
+        pv=None,
+        candidates=[],
+    )
+
+
 class TestGameRepository(unittest.TestCase):
     def setUp(self):
         self.repository = GameRepository()
@@ -203,6 +220,54 @@ class TestGameRepository(unittest.TestCase):
             (game_id,),
         ).fetchone()["count"]
         self.assertEqual(count, len(self.positions))
+
+    def test_list_opening_aggregates_counts_moves_by_previous_sfen(self):
+        start_sfen = "startpos b - 1"
+        after_76 = "after 7g7f w - 2"
+        after_34 = "after 3c3d b - 3"
+        first_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, after_76, "7g7f", 100),
+            opening_position(2, after_34, "3c3d", None),
+        ]
+        second_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, after_76, "7g7f", 200),
+        ]
+        other_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, "after 2g2f w - 2", "2g2f", 50),
+        ]
+
+        self.repository.save_game(self.game, first_positions)
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#2"),
+            second_positions,
+        )
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#3"),
+            other_positions,
+        )
+
+        aggregates = self.repository.list_opening_aggregates()
+
+        self.assertEqual(aggregates[0].source, "self")
+        self.assertEqual(aggregates[0].sfen, start_sfen)
+        self.assertEqual(aggregates[0].move, "7g7f")
+        self.assertEqual(aggregates[0].count, 2)
+        self.assertEqual(aggregates[0].avg_eval, 150)
+        by_move = {aggregate.move: aggregate for aggregate in aggregates}
+        self.assertEqual(by_move["2g2f"].count, 1)
+        self.assertEqual(by_move["2g2f"].avg_eval, 50)
+        self.assertEqual(by_move["3c3d"].sfen, after_76)
+        self.assertEqual(by_move["3c3d"].avg_eval, None)
+
+    def test_list_opening_aggregates_uses_requested_source(self):
+        self.repository.save_game(self.game, self.positions)
+
+        aggregates = self.repository.list_opening_aggregates(source="professional")
+
+        self.assertEqual(aggregates[0].source, "professional")
 
 
 if __name__ == "__main__":
