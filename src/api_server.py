@@ -44,6 +44,15 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 len(parts) == 4
                 and parts[0] == "api"
                 and parts[1] == "positions"
+                and parts[3] == "opening-comparison-explain"
+            ):
+                self._send_json(self._explain_opening_comparison_from_request(int(parts[2])), 200)
+                return
+
+            if (
+                len(parts) == 4
+                and parts[0] == "api"
+                and parts[1] == "positions"
                 and parts[3] == "explain"
             ):
                 self._send_json(self._explain_position_from_request(int(parts[2])), 200)
@@ -268,6 +277,27 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             timeout=float(timeout),
         )
 
+    def _explain_opening_comparison_from_request(self, position_id: int) -> dict:
+        raw_body = self._read_body()
+        payload = _decode_json_payload(raw_body)
+        sources = payload.get("sources")
+        llm_command = payload.get("llm_command")
+        timeout = payload.get("timeout", 60.0)
+        if sources is not None and not isinstance(sources, list):
+            raise ApiError("Request body field sources must be array", 400)
+        if sources is not None and not all(isinstance(source, str) for source in sources):
+            raise ApiError("Request body field sources must contain strings", 400)
+        if llm_command is not None and not isinstance(llm_command, str):
+            raise ApiError("Request body field llm_command must be string", 400)
+        if not isinstance(timeout, (int, float)):
+            raise ApiError("Request body field timeout must be number", 400)
+        return self.api.explain_opening_comparison(
+            position_id,
+            sources=sources,
+            llm_command=llm_command,
+            timeout=float(timeout),
+        )
+
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
         return self.rfile.read(content_length)
@@ -347,7 +377,7 @@ def is_import_post_path(path: str) -> bool:
         len(parts) == 4
         and parts[0] == "api"
         and parts[1] == "positions"
-        and parts[3] in ("analyze", "explain")
+        and parts[3] in ("analyze", "explain", "opening-comparison-explain")
     ):
         return True
     return (

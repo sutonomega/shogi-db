@@ -391,6 +391,35 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertIn("source別定跡候補:", response["prompt"])
         self.assertIn("エンジン候補手:", response["prompt"])
 
+    def test_explain_opening_comparison(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position = self.repository.list_positions(game_id)[0]
+        self.api.rebuild_openings()
+
+        with patch("src.api.generate_position_explanation") as generate:
+            generate.return_value = "7六歩と定跡候補を比較しました。"
+
+            response = self.api.explain_opening_comparison(
+                position.id,
+                sources=["self"],
+                llm_command="fake-llm",
+            )
+
+        self.assertEqual(response["position"]["id"], position.id)
+        self.assertEqual(response["sources"], ["self"])
+        self.assertIn("source別定跡候補:", response["prompt"])
+        self.assertEqual(response["explanation"], "7六歩と定跡候補を比較しました。")
+        generate.assert_called_once()
+
+    def test_explain_opening_comparison_requires_llm_command(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position = self.repository.list_positions(game_id)[0]
+
+        with self.assertRaises(ApiError) as context:
+            self.api.explain_opening_comparison(position.id)
+
+        self.assertEqual(context.exception.status_code, 400)
+
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)
 

@@ -87,6 +87,17 @@ class TestApiServer(unittest.TestCase):
         self.assertIn("source別定跡候補:", comparison_response["prompt"])
         self.assertIn("定跡候補:professional", comparison_response["materials"]["missing"])
 
+        comparison_explain_response = self._post_json(
+            "/api/positions/1/opening-comparison-explain",
+            {
+                "sources": ["self", "professional"],
+                "llm_command": "python3 -c \"import sys; print('比較解説:' + sys.stdin.read().splitlines()[0])\"",
+                "timeout": 5,
+            },
+        )
+        self.assertEqual(comparison_explain_response["position"]["id"], 1)
+        self.assertTrue(comparison_explain_response["explanation"].startswith("比較解説:"))
+
         explain_response = self._post_json(
             "/api/positions/1/explain",
             {

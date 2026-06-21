@@ -309,6 +309,43 @@ class ShogiDbApi:
         *,
         sources: list[str] | None = None,
     ) -> dict:
+        return self._build_opening_comparison_payload(position_id, sources=sources)
+
+    def explain_opening_comparison(
+        self,
+        position_id: int,
+        *,
+        sources: list[str] | None = None,
+        llm_command: str | None = None,
+        timeout: float = 60.0,
+    ) -> dict:
+        resolved_command = llm_command or os.environ.get("SHOGI_DB_LLM_COMMAND")
+        if not resolved_command:
+            raise ApiError("LLM command is required", 400)
+
+        payload = self._build_opening_comparison_payload(position_id, sources=sources)
+        try:
+            explanation = generate_position_explanation(
+                payload["prompt"],
+                llm_command=resolved_command,
+                timeout=timeout,
+            )
+        except PositionExplanationError as exc:
+            raise ApiError(str(exc), 500) from exc
+        except OSError as exc:
+            raise ApiError(str(exc), 500) from exc
+
+        return {
+            **payload,
+            "explanation": explanation,
+        }
+
+    def _build_opening_comparison_payload(
+        self,
+        position_id: int,
+        *,
+        sources: list[str] | None = None,
+    ) -> dict:
         position = self.repository.get_position(position_id)
         if position is None:
             raise ApiError(f"Position not found: {position_id}", 404)
