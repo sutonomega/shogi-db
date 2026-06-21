@@ -92,7 +92,6 @@ const openingSummary = document.querySelector("#openingSummary");
 const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
 const explanationSummary = document.querySelector("#explanationSummary");
 const explanationMissing = document.querySelector("#explanationMissing");
-const llmCommandInput = document.querySelector("#llmCommandInput");
 const explanationPrompt = document.querySelector("#explanationPrompt");
 const explanationOutput = document.querySelector("#explanationOutput");
 const buildExplanationPromptButton = document.querySelector("#buildExplanationPromptButton");
@@ -972,14 +971,12 @@ async function generateExplanation() {
   renderExplanationPrompt();
 
   try {
-    const llmCommand = llmCommandInput.value.trim();
-    const requestBody = llmCommand ? { llm_command: llmCommand } : {};
     const response = await fetch(`/api/positions/${position.id}/explain`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({}),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
