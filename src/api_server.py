@@ -126,6 +126,22 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 len(parts) == 4
                 and parts[0] == "api"
                 and parts[1] == "positions"
+                and parts[3] == "opening-comparison-prompt"
+            ):
+                query = parse_qs(parsed_url.query)
+                self._send_json(
+                    self.api.get_opening_comparison_prompt(
+                        int(parts[2]),
+                        sources=_parse_sources(query.get("sources", ["self"])[0]),
+                    ),
+                    200,
+                )
+                return
+
+            if (
+                len(parts) == 4
+                and parts[0] == "api"
+                and parts[1] == "positions"
                 and parts[3] == "explanation-prompt"
             ):
                 self._send_json(
@@ -492,6 +508,10 @@ def _decode_json_payload(raw_body: bytes) -> dict:
     if not isinstance(payload, dict):
         raise ApiError("JSON body must be an object", 400)
     return payload
+
+
+def _parse_sources(value: str) -> list[str]:
+    return [source.strip() for source in value.split(",") if source.strip()]
 
 
 if __name__ == "__main__":

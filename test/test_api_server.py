@@ -79,6 +79,14 @@ class TestApiServer(unittest.TestCase):
         self.assertIn("SFEN:", prompt_response["prompt"])
         self.assertIn("評価値", prompt_response["materials"]["missing"])
 
+        comparison_response = self._get_json(
+            "/api/positions/1/opening-comparison-prompt?sources=self,professional"
+        )
+        self.assertEqual(comparison_response["position"]["id"], 1)
+        self.assertEqual(comparison_response["sources"], ["self", "professional"])
+        self.assertIn("source別定跡候補:", comparison_response["prompt"])
+        self.assertIn("定跡候補:professional", comparison_response["materials"]["missing"])
+
         explain_response = self._post_json(
             "/api/positions/1/explain",
             {

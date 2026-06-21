@@ -24,6 +24,10 @@ from .game_repository import (
 from .kif_encoding import decode_kif_bytes
 from .kif_parser import KifParser
 from .opening_aggregator import OpeningAggregator
+from .opening_comparison import (
+    build_opening_comparison_materials,
+    build_opening_comparison_prompt,
+)
 from .position_explanation import (
     PositionExplanationError,
     build_position_explanation_materials,
@@ -299,6 +303,46 @@ class ShogiDbApi:
             ],
         }
 
+    def get_opening_comparison_prompt(
+        self,
+        position_id: int,
+        *,
+        sources: list[str] | None = None,
+    ) -> dict:
+        position = self.repository.get_position(position_id)
+        if position is None:
+            raise ApiError(f"Position not found: {position_id}", 404)
+
+        normalized_sources = self._normalize_opening_sources(sources)
+        position_data = self._position_to_dict(position)
+        frequencies = self.repository.list_move_frequencies(position.sfen)
+        total = sum(frequency.count for frequency in frequencies)
+        move_frequencies = [
+            self._move_frequency_to_dict(frequency, total)
+            for frequency in frequencies
+        ]
+        openings_by_source = {
+            source: [
+                self._opening_to_dict(opening, total=None)
+                for opening in self.repository.list_openings(
+                    source=source,
+                    sfen=position.sfen,
+                )
+            ]
+            for source in normalized_sources
+        }
+        materials = build_opening_comparison_materials(
+            position_data,
+            move_frequencies,
+            openings_by_source,
+        )
+        return {
+            "position": position_data,
+            "sources": normalized_sources,
+            "materials": materials,
+            "prompt": build_opening_comparison_prompt(materials),
+        }
+
     def analyze_position(
         self,
         position_id: int,
@@ -430,6 +474,17 @@ class ShogiDbApi:
             "engine_name": position.engine_name,
             "engine_depth": position.engine_depth,
         }
+
+    @staticmethod
+    def _normalize_opening_sources(sources: list[str] | None) -> list[str]:
+        normalized = []
+        for source in sources or ["self"]:
+            source = source.strip()
+            if source and source not in normalized:
+                normalized.append(source)
+        if not normalized:
+            raise ApiError("Opening source is empty", 400)
+        return normalized
 
     def _strategy_stats_to_dict(self, stats: StrategyStats) -> dict:
         return {

@@ -110,6 +110,7 @@ API:
 | `POST` | `/api/positions/{id}/explain` | 指定局面の解説を外部 LLM コマンドで生成する |
 | `GET` | `/api/blunders/explanation-prompt?game_id={id}&move_number={n}` | 悪手理由解説用プロンプトを返す |
 | `POST` | `/api/blunders/explain` | 悪手理由解説を外部 LLM コマンドで生成する |
+| `GET` | `/api/positions/{id}/opening-comparison-prompt` | 指定局面の定跡比較用プロンプトを返す |
 
 局面解説の生成では、`llm_command` または `SHOGI_DB_LLM_COMMAND` で指定した外部コマンドへプロンプトを標準入力で渡し、標準出力を解説文として受け取る。shogi-db 本体は特定の LLM サービスや SDK に依存しない。
 
@@ -117,6 +118,8 @@ API:
 
 悪手理由解説では、悪手ランキングの `game_id` と `move_number` を指定し、着手前 SFEN、着手後 SFEN、実戦手、前後評価値、評価値低下量、候補手、読み筋を入力材料にする。読み筋や候補手が不足している場合は、プロンプト上で不足を明示する。
 生成 API では、局面解説と同じ `llm_command` または `SHOGI_DB_LLM_COMMAND` を使い、悪手理由解説用プロンプトを標準入力で渡す。
+
+定跡比較では、指定局面の SFEN をキーに、自分の実戦頻度手、`openings` の source 別候補手、保存済みエンジン最善手・候補手を比較材料にする。外部 source が未登録の場合は、不足項目として明示する。
 
 将来 API:
 
