@@ -292,6 +292,53 @@ input {
   margin: 0;
 }
 
+.stats-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.stats-item-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.stats-item-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+}
+
+.stats-item-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.blunder-explanation-output {
+  overflow: auto;
+  max-height: 180px;
+  margin: 4px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: #f7fbf8;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .game-table-shell {
   overflow-x: auto;
   border: 1px solid var(--line);
