@@ -74,6 +74,11 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(len(positions_response["positions"]), 3)
         self.assertEqual(positions_response["positions"][1]["move"], "7g7f")
 
+        prompt_response = self._get_json("/api/positions/1/explanation-prompt")
+        self.assertEqual(prompt_response["position"]["id"], 1)
+        self.assertIn("SFEN:", prompt_response["prompt"])
+        self.assertIn("評価値", prompt_response["materials"]["missing"])
+
     def test_import_endpoint_accepts_cp932_kif_body(self):
         import_response = self._post_bytes(
             "/api/games/import",
