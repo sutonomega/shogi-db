@@ -11,6 +11,11 @@ const state = {
   openings: [],
   openingTotal: 0,
   openingRequestId: 0,
+  openingComparisonPrompt: "",
+  openingComparisonText: "",
+  openingComparisonMissing: [],
+  openingComparisonStatus: "未作成",
+  openingComparisonRequestId: 0,
   explanationPrompt: "",
   explanationText: "",
   explanationMissing: [],
@@ -91,6 +96,12 @@ const moveFrequencySummary = document.querySelector("#moveFrequencySummary");
 const openingList = document.querySelector("#openingList");
 const openingSummary = document.querySelector("#openingSummary");
 const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
+const openingComparisonSummary = document.querySelector("#openingComparisonSummary");
+const openingComparisonMissing = document.querySelector("#openingComparisonMissing");
+const openingComparisonPrompt = document.querySelector("#openingComparisonPrompt");
+const openingComparisonOutput = document.querySelector("#openingComparisonOutput");
+const buildOpeningComparisonButton = document.querySelector("#buildOpeningComparisonButton");
+const generateOpeningComparisonButton = document.querySelector("#generateOpeningComparisonButton");
 const explanationSummary = document.querySelector("#explanationSummary");
 const explanationMissing = document.querySelector("#explanationMissing");
 const explanationPrompt = document.querySelector("#explanationPrompt");
@@ -383,6 +394,26 @@ function renderOpenings() {
 
     openingList.appendChild(item);
   }
+}
+
+function renderOpeningComparison() {
+  openingComparisonSummary.textContent = state.openingComparisonStatus;
+  openingComparisonMissing.textContent = state.openingComparisonMissing.length
+    ? `不足: ${state.openingComparisonMissing.join("、")}`
+    : "不足項目はありません";
+  openingComparisonPrompt.textContent = state.openingComparisonPrompt || "現在局面の定跡比較を作成できます";
+  openingComparisonOutput.textContent = state.openingComparisonText || "比較解説はまだありません";
+  buildOpeningComparisonButton.disabled = state.openingComparisonStatus === "作成中" || state.openingComparisonStatus === "生成中";
+  generateOpeningComparisonButton.disabled = state.openingComparisonStatus === "生成中";
+}
+
+function resetOpeningComparison() {
+  state.openingComparisonRequestId += 1;
+  state.openingComparisonPrompt = "";
+  state.openingComparisonText = "";
+  state.openingComparisonMissing = [];
+  state.openingComparisonStatus = "未作成";
+  renderOpeningComparison();
 }
 
 function renderExplanationPrompt() {
@@ -762,6 +793,7 @@ function svgElement(name, attributes = {}) {
 function setCurrentMove(moveNumber) {
   const max = Math.max(state.positions.length - 1, 0);
   state.currentMove = Math.max(0, Math.min(moveNumber, max));
+  resetOpeningComparison();
   resetExplanationPrompt();
   renderBoard();
   loadMoveFrequencies();
@@ -881,6 +913,7 @@ async function loadViewer(gameId) {
     state.moveFrequencyTotal = 0;
     state.openings = [];
     state.openingTotal = 0;
+    resetOpeningComparison();
     resetExplanationPrompt();
     setStatus("");
     renderBoard();
@@ -893,6 +926,7 @@ async function loadViewer(gameId) {
     state.moveFrequencyTotal = 0;
     state.openings = [];
     state.openingTotal = 0;
+    resetOpeningComparison();
     resetExplanationPrompt();
     setStatus(`局面データを取得できませんでした: ${error.message}`, "error");
     renderBoard();
@@ -990,6 +1024,83 @@ async function rebuildOpenings() {
     setStatus(`定跡DBを更新できませんでした: ${error.message}`, "error");
   } finally {
     rebuildOpeningsButton.disabled = false;
+  }
+}
+
+function openingComparisonSources() {
+  return ["self", "professional", "yaneou"];
+}
+
+async function loadOpeningComparisonPrompt() {
+  const position = state.positions[state.currentMove];
+  if (!position?.id) return;
+
+  const requestId = state.openingComparisonRequestId + 1;
+  state.openingComparisonRequestId = requestId;
+  state.openingComparisonStatus = "作成中";
+  renderOpeningComparison();
+
+  try {
+    const query = new URLSearchParams({
+      sources: openingComparisonSources().join(","),
+    });
+    const response = await fetch(`/api/positions/${position.id}/opening-comparison-prompt?${query.toString()}`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    if (requestId !== state.openingComparisonRequestId) return;
+    state.openingComparisonPrompt = typeof payload.prompt === "string" ? payload.prompt : "";
+    state.openingComparisonMissing = Array.isArray(payload.materials?.missing) ? payload.materials.missing : [];
+    state.openingComparisonStatus = "作成済み";
+  } catch (error) {
+    if (requestId !== state.openingComparisonRequestId) return;
+    state.openingComparisonPrompt = "";
+    state.openingComparisonMissing = [];
+    state.openingComparisonStatus = "失敗";
+    setStatus(`定跡比較を作成できませんでした: ${error.message}`, "error");
+  } finally {
+    if (requestId === state.openingComparisonRequestId) {
+      renderOpeningComparison();
+    }
+  }
+}
+
+async function generateOpeningComparison() {
+  const position = state.positions[state.currentMove];
+  if (!position?.id) return;
+
+  const requestId = state.openingComparisonRequestId + 1;
+  state.openingComparisonRequestId = requestId;
+  state.openingComparisonStatus = "生成中";
+  renderOpeningComparison();
+
+  try {
+    const response = await fetch(`/api/positions/${position.id}/opening-comparison-explain`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sources: openingComparisonSources() }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    if (requestId !== state.openingComparisonRequestId) return;
+    state.openingComparisonPrompt = typeof payload.prompt === "string" ? payload.prompt : "";
+    state.openingComparisonText = typeof payload.explanation === "string" ? payload.explanation : "";
+    state.openingComparisonMissing = Array.isArray(payload.materials?.missing) ? payload.materials.missing : [];
+    state.openingComparisonStatus = "生成済み";
+  } catch (error) {
+    if (requestId !== state.openingComparisonRequestId) return;
+    state.openingComparisonText = "";
+    state.openingComparisonStatus = "失敗";
+    setStatus(`定跡比較解説を生成できませんでした: ${error.message}`, "error");
+  } finally {
+    if (requestId === state.openingComparisonRequestId) {
+      renderOpeningComparison();
+    }
   }
 }
 
@@ -1217,6 +1328,8 @@ directoryImportForm.addEventListener("submit", (event) => {
 
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
 rebuildOpeningsButton.addEventListener("click", rebuildOpenings);
+buildOpeningComparisonButton.addEventListener("click", loadOpeningComparisonPrompt);
+generateOpeningComparisonButton.addEventListener("click", generateOpeningComparison);
 buildExplanationPromptButton.addEventListener("click", loadExplanationPrompt);
 generateExplanationButton.addEventListener("click", generateExplanation);
 

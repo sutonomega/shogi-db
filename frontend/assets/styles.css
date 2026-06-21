@@ -674,12 +674,15 @@ input {
   background: #2b6cb0;
 }
 
+.opening-comparison-missing,
 .explanation-missing {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
 }
 
+.opening-comparison-prompt,
+.opening-comparison-output,
 .explanation-prompt,
 .explanation-output {
   overflow: auto;
@@ -697,6 +700,7 @@ input {
   overflow-wrap: anywhere;
 }
 
+.opening-comparison-output,
 .explanation-output {
   max-height: 260px;
   background: #f7fbf8;
