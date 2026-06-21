@@ -633,7 +633,8 @@ input {
   font-size: 12px;
 }
 
-.explanation-prompt {
+.explanation-prompt,
+.explanation-output {
   overflow: auto;
   max-height: 220px;
   margin: 0;
@@ -647,6 +648,11 @@ input {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.explanation-output {
+  max-height: 260px;
+  background: #f7fbf8;
 }
 
 .eval-grid {
