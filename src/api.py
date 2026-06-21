@@ -206,6 +206,8 @@ class ShogiDbApi:
             raise ApiError("LLM command is required", 400)
 
         payload = self._build_blunder_explanation_payload(game_id, move_number)
+        if payload["materials"].get("severity") == "none":
+            raise ApiError("Evaluation change is too small for blunder explanation", 400)
         try:
             explanation = generate_position_explanation(
                 payload["prompt"],

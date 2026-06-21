@@ -31,6 +31,8 @@ def build_blunder_explanation_materials(
         "pv": current_position.get("pv"),
         "candidates": current_position.get("candidates", []),
     }
+    materials["severity"] = _severity(materials["loss"])
+    materials["explanation_policy"] = _explanation_policy(materials["severity"])
     materials["missing"] = _missing_fields(materials)
     return materials
 
@@ -51,6 +53,8 @@ def build_blunder_explanation_prompt(materials: dict) -> str:
             "- 根拠に使った入力項目を明示する",
             "- 与えられていない読みや評価を創作しない",
             "- 候補手や読み筋が不足している場合は、不足している前提を明記する",
+            "- 評価値低下が小さい場合は、原因を断定せず解説対象外または軽微な変化として扱う",
+            f"- 解説方針: {materials['explanation_policy']}",
             "- 次に同じミスを避けるための改善案を含める",
             "",
             "確定情報:",
@@ -63,6 +67,7 @@ def build_blunder_explanation_prompt(materials: dict) -> str:
             f"- 着手後評価値: {_format_eval(materials.get('eval_after'))}",
             f"- 評価値変化: {_format_eval(materials.get('eval_delta'))}",
             f"- 損失: {_format_loss(materials.get('loss'))}",
+            f"- 解説粒度: {materials['severity']}",
             f"- 最善手: {_format_nullable(materials.get('best_move'))}",
             f"- 読み筋: {_format_nullable(materials.get('pv'))}",
             f"- 候補手: {candidates_text}",
@@ -70,10 +75,11 @@ def build_blunder_explanation_prompt(materials: dict) -> str:
             "",
             "出力:",
             "1. 確定情報の要約",
-            "2. 実戦手で評価値が下がった根拠",
-            "3. 推測として考えられる悪手理由",
-            "4. 候補手・読み筋から見える改善案",
-            "5. 不足情報と注意点",
+            "2. 評価値低下量に応じた解説の要否",
+            "3. 実戦手で評価値が下がった根拠",
+            "4. 推測として考えられる悪手理由",
+            "5. 候補手・読み筋から見える改善案",
+            "6. 不足情報と注意点",
         ]
     )
 
@@ -99,6 +105,26 @@ def _missing_fields(materials: dict) -> list[str]:
     if not materials.get("candidates"):
         missing.append("候補手")
     return missing
+
+
+def _severity(loss: int | None) -> str:
+    if loss is None:
+        return "unknown"
+    if loss < 200:
+        return "none"
+    if loss < 500:
+        return "brief"
+    return "detailed"
+
+
+def _explanation_policy(severity: str) -> str:
+    if severity == "none":
+        return "200点未満の軽微な変化のため、悪手理由を無理に作らない"
+    if severity == "brief":
+        return "200点以上500点未満の低下として、根拠に限定した簡易解説にする"
+    if severity == "detailed":
+        return "500点以上の低下として、候補手・読み筋を使って詳細に解説する"
+    return "評価値低下量が不明なため、不足情報を明示して断定を避ける"
 
 
 def _format_eval(value: int | None) -> str:
