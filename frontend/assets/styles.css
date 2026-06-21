@@ -628,6 +628,7 @@ input {
 
 .move-frequency-panel,
 .opening-panel,
+.candidate-panel,
 .explanation-panel {
   display: grid;
   gap: 10px;
@@ -637,9 +638,58 @@ input {
 }
 
 .move-frequency-list,
-.opening-list {
+.opening-list,
+.candidate-list {
   display: grid;
   gap: 8px;
+}
+
+.candidate-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: #fbfcfd;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.candidate-item:hover,
+.candidate-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+}
+
+.candidate-item.actual {
+  border-color: #2b6cb0;
+}
+
+.candidate-rank,
+.candidate-eval,
+.candidate-item small,
+.candidate-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.candidate-item strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-eval {
+  font-variant-numeric: tabular-nums;
+}
+
+.candidate-empty {
+  margin: 0;
 }
 
 .move-frequency-item,
