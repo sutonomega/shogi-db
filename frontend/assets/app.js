@@ -46,6 +46,30 @@ const promotedLabels = {
   R: "龍",
 };
 
+const japaneseFiles = {
+  1: "１",
+  2: "２",
+  3: "３",
+  4: "４",
+  5: "５",
+  6: "６",
+  7: "７",
+  8: "８",
+  9: "９",
+};
+
+const japaneseRanks = {
+  a: "一",
+  b: "二",
+  c: "三",
+  d: "四",
+  e: "五",
+  f: "六",
+  g: "七",
+  h: "八",
+  i: "九",
+};
+
 const rowsElement = document.querySelector("#gameRows");
 const statusPanel = document.querySelector("#statusPanel");
 const strategyStatsPanel = document.querySelector("#strategyStatsPanel");
@@ -313,6 +337,7 @@ function blunderKey(blunder) {
 function renderMoveFrequencies() {
   moveFrequencyList.textContent = "";
   moveFrequencySummary.textContent = `${state.moveFrequencyTotal}回`;
+  const position = state.positions[state.currentMove];
 
   if (!state.moveFrequencies.length) {
     const empty = document.createElement("p");
@@ -330,7 +355,7 @@ function renderMoveFrequencies() {
     heading.className = "move-frequency-heading";
 
     const move = document.createElement("strong");
-    move.textContent = frequency.move;
+    move.textContent = moveLabelForCandidate(frequency.move, position?.sfen);
     heading.appendChild(move);
 
     const count = document.createElement("span");
@@ -356,6 +381,7 @@ function renderMoveFrequencies() {
 function renderOpenings() {
   openingList.textContent = "";
   openingSummary.textContent = `${state.openingTotal}回`;
+  const position = state.positions[state.currentMove];
 
   if (!state.openings.length) {
     const empty = document.createElement("p");
@@ -373,7 +399,7 @@ function renderOpenings() {
     heading.className = "opening-heading";
 
     const move = document.createElement("strong");
-    move.textContent = opening.move;
+    move.textContent = moveLabelForCandidate(opening.move, position?.sfen);
     heading.appendChild(move);
 
     const count = document.createElement("span");
@@ -547,12 +573,19 @@ function renderBoard() {
   }
 
   const parsed = parseSfen(position.sfen);
+  const moveInfo = currentMoveInfo();
   boardGrid.textContent = "";
 
-  for (const row of parsed.squares) {
-    for (const piece of row) {
+  for (let rowIndex = 0; rowIndex < parsed.squares.length; rowIndex += 1) {
+    for (let columnIndex = 0; columnIndex < parsed.squares[rowIndex].length; columnIndex += 1) {
+      const piece = parsed.squares[rowIndex][columnIndex];
       const square = document.createElement("div");
-      square.className = "square";
+      const classes = ["square"];
+      if (isMoveSquare(moveInfo?.from, rowIndex, columnIndex)) classes.push("move-from");
+      if (isMoveSquare(moveInfo?.to, rowIndex, columnIndex)) classes.push("move-to");
+      square.className = classes.join(" ");
+      square.dataset.file = String(9 - columnIndex);
+      square.dataset.rank = String.fromCharCode("a".charCodeAt(0) + rowIndex);
       if (piece) {
         const span = document.createElement("span");
         const basePiece = piece.replace("+", "");
@@ -569,7 +602,7 @@ function renderBoard() {
   moveCounter.textContent = `${state.currentMove} / ${Math.max(state.positions.length - 1, 0)}`;
   viewerTitle.textContent = state.game ? `${state.game.black} vs ${state.game.white}` : "対局";
   positionMoveNumber.textContent = `${position.move_number}手目`;
-  positionMove.textContent = position.move || "開始局面";
+  positionMove.textContent = moveInfo?.label || "開始局面";
   positionEval.textContent = formatEvalWithDelta(state.currentMove);
   positionSfen.textContent = position.sfen;
   renderEvalGraph();
@@ -593,6 +626,85 @@ function pieceLabel(piece) {
     return promotedLabels[piece[1].toUpperCase()] || piece;
   }
   return pieceLabels[piece.toUpperCase()] || piece;
+}
+
+function currentMoveInfo() {
+  const position = state.positions[state.currentMove];
+  if (!position?.move) return null;
+  return moveInfoForPosition(state.currentMove);
+}
+
+function moveInfoForPosition(index) {
+  const position = state.positions[index];
+  if (!position?.move) return null;
+  const move = parseUsiMove(position.move);
+  if (!move) return { label: position.move, from: null, to: null };
+
+  const previousPosition = state.positions[index - 1] || null;
+  const previousMove = parseUsiMove(state.positions[index - 1]?.move);
+  const previousBoard = previousPosition?.sfen ? parseSfen(previousPosition.sfen).squares : null;
+  const sourcePiece = move.dropPiece || pieceAt(previousBoard, move.from);
+  const sideMark = (position.move_number ?? index) % 2 === 1 ? "▲" : "△";
+  const sameDestination = previousMove && move.to && previousMove.to
+    && previousMove.to.file === move.to.file
+    && previousMove.to.rank === move.to.rank;
+  const destination = sameDestination ? "同" : `${japaneseFiles[move.to.file] || move.to.file}${japaneseRanks[move.to.rank] || move.to.rank}`;
+  const pieceName = pieceLabel(sourcePiece || "");
+  const suffix = move.dropPiece ? "打" : move.promote ? "成" : "";
+
+  return {
+    label: `${sideMark}${destination}${pieceName || position.move}${suffix}`,
+    from: move.from,
+    to: move.to,
+  };
+}
+
+function moveLabelForCandidate(moveText, sfen) {
+  const move = parseUsiMove(moveText);
+  if (!move || !sfen) return moveText || "なし";
+
+  const parsed = parseSfen(sfen);
+  const sourcePiece = move.dropPiece || pieceAt(parsed.squares, move.from);
+  const sideMark = parsed.turn === "w" ? "△" : "▲";
+  const destination = `${japaneseFiles[move.to.file] || move.to.file}${japaneseRanks[move.to.rank] || move.to.rank}`;
+  const pieceName = pieceLabel(sourcePiece || "");
+  const suffix = move.dropPiece ? "打" : move.promote ? "成" : "";
+  return `${sideMark}${destination}${pieceName || moveText}${suffix}`;
+}
+
+function parseUsiMove(move) {
+  if (typeof move !== "string") return null;
+  const drop = move.match(/^([PLNSGBR])\*([1-9])([a-i])$/);
+  if (drop) {
+    return {
+      dropPiece: drop[1],
+      from: null,
+      to: { file: Number(drop[2]), rank: drop[3] },
+      promote: false,
+    };
+  }
+
+  const normal = move.match(/^([1-9])([a-i])([1-9])([a-i])(\+)?$/);
+  if (!normal) return null;
+  return {
+    dropPiece: null,
+    from: { file: Number(normal[1]), rank: normal[2] },
+    to: { file: Number(normal[3]), rank: normal[4] },
+    promote: Boolean(normal[5]),
+  };
+}
+
+function pieceAt(squares, square) {
+  if (!squares || !square) return null;
+  const row = square.rank.charCodeAt(0) - "a".charCodeAt(0);
+  const column = 9 - square.file;
+  return squares[row]?.[column] || null;
+}
+
+function isMoveSquare(square, rowIndex, columnIndex) {
+  if (!square) return false;
+  return square.file === 9 - columnIndex
+    && square.rank === String.fromCharCode("a".charCodeAt(0) + rowIndex);
 }
 
 function formatHand(pieces) {

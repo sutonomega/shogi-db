@@ -461,6 +461,7 @@ input {
 }
 
 .square {
+  position: relative;
   display: grid;
   place-items: center;
   min-width: 0;
@@ -471,6 +472,29 @@ input {
   font-size: clamp(18px, 5.6vw, 30px);
   font-weight: 600;
   line-height: 1;
+}
+
+.square.move-from,
+.square.move-to {
+  background: #f7d77a;
+}
+
+.square.move-to::after {
+  position: absolute;
+  inset: 6px;
+  border: 2px solid #276749;
+  border-radius: 4px;
+  content: "";
+  pointer-events: none;
+}
+
+.square.move-from::after {
+  position: absolute;
+  inset: 9px;
+  border: 2px dashed #1f6f8b;
+  border-radius: 4px;
+  content: "";
+  pointer-events: none;
 }
 
 .square:nth-child(9n) {
