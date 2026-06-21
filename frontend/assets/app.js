@@ -324,6 +324,11 @@ function renderBlunders() {
     explainButton.disabled = explanation.status === "生成中";
     explainButton.addEventListener("click", () => generateBlunderExplanation(blunder));
     actions.appendChild(explainButton);
+    const viewButton = document.createElement("button");
+    viewButton.type = "button";
+    viewButton.textContent = "局面へ";
+    viewButton.addEventListener("click", () => openBlunderPosition(blunder));
+    actions.appendChild(viewButton);
     item.appendChild(actions);
 
     if (explanation.status || explanation.text) {
@@ -339,6 +344,10 @@ function renderBlunders() {
 
 function blunderKey(blunder) {
   return `${blunder.game_id}:${blunder.move_number}`;
+}
+
+function openBlunderPosition(blunder) {
+  window.location.href = `/games/${blunder.game_id}?move=${blunder.move_number}`;
 }
 
 function renderMoveFrequencies() {
@@ -990,6 +999,13 @@ function setCurrentMove(moveNumber) {
   loadOpenings();
 }
 
+function moveNumberFromQuery() {
+  const value = new URLSearchParams(window.location.search).get("move");
+  if (!value) return 0;
+  const moveNumber = Number(value);
+  return Number.isInteger(moveNumber) && moveNumber >= 0 ? moveNumber : 0;
+}
+
 async function loadGames() {
   showListView();
   setStatus("読み込み中");
@@ -1098,7 +1114,7 @@ async function loadViewer(gameId) {
     const payload = await response.json();
     state.game = payload.game;
     state.positions = Array.isArray(payload.positions) ? payload.positions : [];
-    state.currentMove = 0;
+    state.currentMove = Math.min(moveNumberFromQuery(), Math.max(state.positions.length - 1, 0));
     state.moveFrequencies = [];
     state.moveFrequencyTotal = 0;
     state.openings = [];
