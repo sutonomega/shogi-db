@@ -77,6 +77,8 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn("renderStrategyStats", content)
         self.assertIn("renderEnclosureStats", content)
         self.assertIn("renderBlunders", content)
+        self.assertIn("blunder.occurrence_count", content)
+        self.assertIn("blunder.game_count", content)
         self.assertIn("generateBlunderExplanation", content)
         self.assertIn('fetch("/api/blunders/explain"', content)
         self.assertIn("blunderKey", content)

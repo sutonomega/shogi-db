@@ -240,6 +240,8 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["blunders"][0]["eval_after"], -120)
         self.assertEqual(response["blunders"][0]["eval_delta"], -200)
         self.assertEqual(response["blunders"][0]["loss"], 200)
+        self.assertEqual(response["blunders"][0]["occurrence_count"], 1)
+        self.assertEqual(response["blunders"][0]["game_count"], 1)
 
     def test_get_blunder_explanation_prompt(self):
         game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]

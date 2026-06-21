@@ -82,6 +82,8 @@ class BlunderRecord:
     eval_after: int
     eval_delta: int
     loss: int
+    occurrence_count: int
+    game_count: int
 
 
 @dataclass
@@ -106,6 +108,16 @@ class GameRepository:
         self.connection = sqlite3.connect(self.db_path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
+        self.connection.create_function("position_key", 1, self._position_key)
+
+    @staticmethod
+    def _position_key(sfen: str | None) -> str | None:
+        if sfen is None:
+            return None
+        parts = sfen.split()
+        if len(parts) < 3:
+            return sfen
+        return " ".join(parts[:3])
 
     def close(self) -> None:
         self.connection.close()
@@ -163,9 +175,22 @@ class GameRepository:
                 ON openings(sfen);
             CREATE INDEX IF NOT EXISTS idx_openings_source_sfen
                 ON openings(source, sfen);
+
+            CREATE TABLE IF NOT EXISTS move_occurrences (
+                sfen        TEXT NOT NULL,
+                move        TEXT NOT NULL,
+                count       INTEGER NOT NULL DEFAULT 0,
+                game_count  INTEGER NOT NULL DEFAULT 0,
+                updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (sfen, move)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_move_occurrences_sfen
+                ON move_occurrences(sfen);
             """
         )
         self._migrate_schema()
+        self._refresh_missing_or_legacy_move_occurrences()
         self.connection.commit()
 
     def _migrate_schema(self) -> None:
@@ -181,6 +206,20 @@ class GameRepository:
         for column, statement in migrations.items():
             if column not in columns:
                 self.connection.execute(statement)
+
+    def _refresh_missing_or_legacy_move_occurrences(self) -> None:
+        has_positions = self.connection.execute(
+            "SELECT 1 FROM positions WHERE move IS NOT NULL LIMIT 1"
+        ).fetchone()
+        occurrence = self.connection.execute(
+            "SELECT sfen FROM move_occurrences LIMIT 1"
+        ).fetchone()
+        has_legacy_key = (
+            occurrence is not None
+            and occurrence["sfen"] != self._position_key(occurrence["sfen"])
+        )
+        if has_positions is not None and (occurrence is None or has_legacy_key):
+            self._refresh_move_occurrences()
 
     def save_game(
         self,
@@ -241,6 +280,7 @@ class GameRepository:
                     for position in positions
                 ],
             )
+            self._refresh_move_occurrences()
 
         return game_id
 
@@ -304,6 +344,27 @@ class GameRepository:
                     for position in positions
                 ],
             )
+            self._refresh_move_occurrences()
+
+    def _refresh_move_occurrences(self) -> None:
+        self.connection.execute("DELETE FROM move_occurrences")
+        self.connection.execute(
+            """
+            INSERT INTO move_occurrences (sfen, move, count, game_count, updated_at)
+            SELECT
+                position_key(previous.sfen) AS sfen,
+                current.move AS move,
+                COUNT(*) AS count,
+                COUNT(DISTINCT current.game_id) AS game_count,
+                datetime('now') AS updated_at
+            FROM positions AS current
+            JOIN positions AS previous
+                ON previous.game_id = current.game_id
+                AND previous.move_number = current.move_number - 1
+            WHERE current.move IS NOT NULL
+            GROUP BY position_key(previous.sfen), current.move
+            """
+        )
 
     def find_game_id_by_raw_kif(self, raw_kif: str) -> int | None:
         row = self.connection.execute(
@@ -511,36 +572,46 @@ class GameRepository:
     def list_blunders(self, limit: int = 20) -> list[BlunderRecord]:
         rows = self.connection.execute(
             """
-            SELECT
-                games.id AS game_id,
-                games.black AS black,
-                games.white AS white,
-                current.move_number AS move_number,
-                current.move AS move,
-                previous.eval AS eval_before,
-                current.eval AS eval_after,
-                CASE
-                    WHEN current.move_number % 2 = 1
-                    THEN current.eval - previous.eval
-                    ELSE previous.eval - current.eval
-                END AS eval_delta
-            FROM positions AS current
-            JOIN positions AS previous
-                ON previous.game_id = current.game_id
-                AND previous.move_number = current.move_number - 1
-            JOIN games
-                ON games.id = current.game_id
-            WHERE current.eval IS NOT NULL
-                AND previous.eval IS NOT NULL
-                AND current.move IS NOT NULL
-                AND (
+            WITH moves_with_previous AS (
+                SELECT
+                    current.game_id AS game_id,
+                    current.move_number AS move_number,
+                    current.move AS move,
+                    position_key(previous.sfen) AS previous_sfen,
+                    previous.eval AS eval_before,
+                    current.eval AS eval_after,
                     CASE
                         WHEN current.move_number % 2 = 1
                         THEN current.eval - previous.eval
                         ELSE previous.eval - current.eval
-                    END
-                ) < 0
-            ORDER BY eval_delta ASC, current.move_number ASC
+                    END AS eval_delta
+                FROM positions AS current
+                JOIN positions AS previous
+                    ON previous.game_id = current.game_id
+                    AND previous.move_number = current.move_number - 1
+                WHERE current.move IS NOT NULL
+            )
+            SELECT
+                games.id AS game_id,
+                games.black AS black,
+                games.white AS white,
+                moves.move_number AS move_number,
+                moves.move AS move,
+                moves.eval_before AS eval_before,
+                moves.eval_after AS eval_after,
+                moves.eval_delta AS eval_delta,
+                occurrences.count AS occurrence_count,
+                occurrences.game_count AS game_count
+            FROM moves_with_previous AS moves
+            JOIN games
+                ON games.id = moves.game_id
+            JOIN move_occurrences AS occurrences
+                ON occurrences.sfen = moves.previous_sfen
+                AND occurrences.move = moves.move
+            WHERE moves.eval_before IS NOT NULL
+                AND moves.eval_after IS NOT NULL
+                AND moves.eval_delta < 0
+            ORDER BY moves.eval_delta ASC, moves.move_number ASC
             LIMIT ?
             """,
             (limit,),
@@ -556,6 +627,8 @@ class GameRepository:
                 eval_after=int(row["eval_after"]),
                 eval_delta=int(row["eval_delta"]),
                 loss=abs(int(row["eval_delta"])),
+                occurrence_count=int(row["occurrence_count"]),
+                game_count=int(row["game_count"]),
             )
             for row in rows
         ]
