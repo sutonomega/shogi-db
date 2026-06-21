@@ -633,7 +633,31 @@ input {
   font-size: 12px;
 }
 
-.explanation-prompt {
+.explanation-command {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.explanation-command input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.explanation-command input:focus {
+  outline: 2px solid var(--accent-weak);
+  border-color: var(--accent);
+}
+
+.explanation-prompt,
+.explanation-output {
   overflow: auto;
   max-height: 220px;
   margin: 0;
@@ -647,6 +671,11 @@ input {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.explanation-output {
+  max-height: 260px;
+  background: #f7fbf8;
 }
 
 .eval-grid {

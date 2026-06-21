@@ -11,6 +11,7 @@ const state = {
   openingTotal: 0,
   openingRequestId: 0,
   explanationPrompt: "",
+  explanationText: "",
   explanationMissing: [],
   explanationStatus: "未作成",
   explanationRequestId: 0,
@@ -91,8 +92,11 @@ const openingSummary = document.querySelector("#openingSummary");
 const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
 const explanationSummary = document.querySelector("#explanationSummary");
 const explanationMissing = document.querySelector("#explanationMissing");
+const llmCommandInput = document.querySelector("#llmCommandInput");
 const explanationPrompt = document.querySelector("#explanationPrompt");
+const explanationOutput = document.querySelector("#explanationOutput");
 const buildExplanationPromptButton = document.querySelector("#buildExplanationPromptButton");
+const generateExplanationButton = document.querySelector("#generateExplanationButton");
 const svgNamespace = "http://www.w3.org/2000/svg";
 const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
@@ -364,11 +368,14 @@ function renderExplanationPrompt() {
     ? `不足: ${state.explanationMissing.join("、")}`
     : "不足: なし";
   explanationPrompt.textContent = state.explanationPrompt || "現在局面のプロンプトを作成できます";
+  explanationOutput.textContent = state.explanationText || "生成結果はまだありません";
   buildExplanationPromptButton.disabled = !state.positions[state.currentMove];
+  generateExplanationButton.disabled = !state.positions[state.currentMove];
 }
 
 function resetExplanationPrompt() {
   state.explanationPrompt = "";
+  state.explanationText = "";
   state.explanationMissing = [];
   state.explanationStatus = "未作成";
   state.explanationRequestId += 1;
@@ -953,6 +960,48 @@ async function loadExplanationPrompt() {
   }
 }
 
+async function generateExplanation() {
+  const position = state.positions[state.currentMove];
+  if (!position?.id) return;
+
+  const requestId = state.explanationRequestId + 1;
+  state.explanationRequestId = requestId;
+  buildExplanationPromptButton.disabled = true;
+  generateExplanationButton.disabled = true;
+  state.explanationStatus = "生成中";
+  renderExplanationPrompt();
+
+  try {
+    const llmCommand = llmCommandInput.value.trim();
+    const requestBody = llmCommand ? { llm_command: llmCommand } : {};
+    const response = await fetch(`/api/positions/${position.id}/explain`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    if (requestId !== state.explanationRequestId) return;
+    state.explanationPrompt = typeof payload.prompt === "string" ? payload.prompt : "";
+    state.explanationText = typeof payload.explanation === "string" ? payload.explanation : "";
+    state.explanationMissing = Array.isArray(payload.materials?.missing) ? payload.materials.missing : [];
+    state.explanationStatus = "生成済み";
+  } catch (error) {
+    if (requestId !== state.explanationRequestId) return;
+    state.explanationText = "";
+    state.explanationStatus = "失敗";
+    setStatus(`局面解説を生成できませんでした: ${error.message}`, "error");
+  } finally {
+    if (requestId === state.explanationRequestId) {
+      renderExplanationPrompt();
+    }
+  }
+}
+
 async function importKifFile(file) {
   importButton.disabled = true;
   setStatus("取り込み中");
@@ -1105,6 +1154,7 @@ directoryImportForm.addEventListener("submit", (event) => {
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
 rebuildOpeningsButton.addEventListener("click", rebuildOpenings);
 buildExplanationPromptButton.addEventListener("click", loadExplanationPrompt);
+generateExplanationButton.addEventListener("click", generateExplanation);
 
 refreshButton.addEventListener("click", () => {
   loadGames();
