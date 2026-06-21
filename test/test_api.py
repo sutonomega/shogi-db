@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from src.api import ApiError, ShogiDbApi
-from src.game_repository import GameRepository
+from src.game_repository import GameRepository, OpeningAggregate
 from src.usi_engine import EngineAnalysis
 
 
@@ -354,6 +354,42 @@ class TestShogiDbApi(unittest.TestCase):
             self.api.get_openings("")
 
         self.assertEqual(context.exception.status_code, 400)
+
+    def test_get_opening_comparison_prompt(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position = self.repository.list_positions(game_id)[0]
+        self.api.rebuild_openings()
+        self.repository.upsert_opening_aggregates([
+            OpeningAggregate(
+                source="professional",
+                sfen=position.sfen,
+                move="2g2f",
+                count=3,
+                avg_eval=42,
+            )
+        ])
+        self.repository.update_position_analysis(
+            position.id,
+            eval_value=20,
+            best_move="7g7f",
+            pv="7g7f 3c3d",
+            candidates=[{"move": "7g7f", "eval": 30}],
+            engine_name="test-engine",
+            engine_depth=1,
+        )
+
+        response = self.api.get_opening_comparison_prompt(
+            position.id,
+            sources=["self", "professional"],
+        )
+
+        self.assertEqual(response["position"]["id"], position.id)
+        self.assertEqual(response["sources"], ["self", "professional"])
+        self.assertEqual(response["materials"]["move_frequencies"][0]["move"], "7g7f")
+        self.assertEqual(response["materials"]["openings_by_source"]["professional"][0]["move"], "2g2f")
+        self.assertEqual(response["materials"]["engine_candidates"][0]["move"], "7g7f")
+        self.assertIn("source別定跡候補:", response["prompt"])
+        self.assertIn("エンジン候補手:", response["prompt"])
 
     def test_list_games(self):
         self.api.import_game(KIF_WITH_ANALYSIS)
