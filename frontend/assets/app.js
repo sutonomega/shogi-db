@@ -142,6 +142,7 @@ const generateExplanationButton = document.querySelector("#generateExplanationBu
 const svgNamespace = "http://www.w3.org/2000/svg";
 const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
+const evalGraphMaxScale = 3000;
 const evalGraphScaleStep = 500;
 
 function formatDate(value) {
@@ -833,13 +834,17 @@ function clippedEval(value, scale) {
   return Math.max(-scale, Math.min(scale, value));
 }
 
+function isClippedEval(value, scale) {
+  return !isMateEval(value) && Math.abs(value) > scale;
+}
+
 function buildEvalScale(points) {
   const maxAbsEval = points.reduce((max, point) => {
     if (point.eval === null || isMateEval(point.eval)) return max;
     return Math.max(max, Math.abs(point.eval));
   }, 0);
   const scaledMax = Math.ceil(maxAbsEval / evalGraphScaleStep) * evalGraphScaleStep;
-  return Math.max(evalGraphMinScale, scaledMax);
+  return Math.min(evalGraphMaxScale, Math.max(evalGraphMinScale, scaledMax));
 }
 
 function renderEvalGraph() {
@@ -921,6 +926,7 @@ function renderEvalGraph() {
   appendEvalPath(pathData);
 
   for (const point of visiblePoints) {
+    const clipped = isClippedEval(point.eval, evalScale);
     const circle = svgElement("circle", {
       cx: xFor(point.index).toFixed(1),
       cy: yFor(point.eval).toFixed(1),
@@ -931,7 +937,9 @@ function renderEvalGraph() {
       tabindex: "0",
     });
     const title = svgElement("title");
-    title.textContent = `${point.moveNumber}手目 ${formatEval(point.eval)}`;
+    title.textContent = clipped
+      ? `${point.moveNumber}手目 ${formatEval(point.eval)} (表示上限外)`
+      : `${point.moveNumber}手目 ${formatEval(point.eval)}`;
     circle.appendChild(title);
     circle.addEventListener("click", () => setCurrentMove(point.index));
     circle.addEventListener("keydown", (event) => {
