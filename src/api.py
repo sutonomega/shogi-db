@@ -21,8 +21,10 @@ from .kif_encoding import decode_kif_bytes
 from .kif_parser import KifParser
 from .opening_aggregator import OpeningAggregator
 from .position_explanation import (
+    PositionExplanationError,
     build_position_explanation_materials,
     build_position_explanation_prompt,
+    generate_position_explanation,
 )
 from .sfen_generator import SfenGenerator
 from .strategy_detector import StrategyDetector
@@ -272,6 +274,41 @@ class ShogiDbApi:
         if position is None:
             raise ApiError(f"Position not found: {position_id}", 404)
 
+        return self._build_position_explanation_payload(position)
+
+    def explain_position(
+        self,
+        position_id: int,
+        *,
+        llm_command: str | None = None,
+        timeout: float = 60.0,
+    ) -> dict:
+        position = self.repository.get_position(position_id)
+        if position is None:
+            raise ApiError(f"Position not found: {position_id}", 404)
+
+        resolved_command = llm_command or os.environ.get("SHOGI_DB_LLM_COMMAND")
+        if not resolved_command:
+            raise ApiError("LLM command is required", 400)
+
+        payload = self._build_position_explanation_payload(position)
+        try:
+            explanation = generate_position_explanation(
+                payload["prompt"],
+                llm_command=resolved_command,
+                timeout=timeout,
+            )
+        except PositionExplanationError as exc:
+            raise ApiError(str(exc), 500) from exc
+        except OSError as exc:
+            raise ApiError(str(exc), 500) from exc
+
+        return {
+            **payload,
+            "explanation": explanation,
+        }
+
+    def _build_position_explanation_payload(self, position: StoredPosition) -> dict:
         position_data = self._position_to_dict(position)
         openings = [
             self._opening_to_dict(opening, total=None)

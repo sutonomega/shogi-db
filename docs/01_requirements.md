@@ -107,6 +107,9 @@ API:
 |---|---|---|
 | `POST` | `/api/positions/{id}/analyze` | 指定局面を水匠で解析する |
 | `GET` | `/api/positions/{id}/explanation-prompt` | 指定局面の解説用プロンプトを返す |
+| `POST` | `/api/positions/{id}/explain` | 指定局面の解説を外部 LLM コマンドで生成する |
+
+局面解説の生成では、`llm_command` または `SHOGI_DB_LLM_COMMAND` で指定した外部コマンドへプロンプトを標準入力で渡し、標準出力を解説文として受け取る。shogi-db 本体は特定の LLM サービスや SDK に依存しない。
 
 将来 API:
 

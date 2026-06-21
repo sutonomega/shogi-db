@@ -79,6 +79,16 @@ class TestApiServer(unittest.TestCase):
         self.assertIn("SFEN:", prompt_response["prompt"])
         self.assertIn("評価値", prompt_response["materials"]["missing"])
 
+        explain_response = self._post_json(
+            "/api/positions/1/explain",
+            {
+                "llm_command": "python3 -c \"import sys; print('解説:' + sys.stdin.read().splitlines()[0])\"",
+                "timeout": 5,
+            },
+        )
+        self.assertEqual(explain_response["position"]["id"], 1)
+        self.assertTrue(explain_response["explanation"].startswith("解説:"))
+
     def test_import_endpoint_accepts_cp932_kif_body(self):
         import_response = self._post_bytes(
             "/api/games/import",
@@ -206,6 +216,7 @@ class TestImportGamePayload(unittest.TestCase):
         self.assertTrue(is_import_post_path("/api/games/import-directory"))
         self.assertTrue(is_import_post_path("/api/openings/rebuild"))
         self.assertTrue(is_import_post_path("/api/positions/123/analyze"))
+        self.assertTrue(is_import_post_path("/api/positions/123/explain"))
         self.assertTrue(
             is_import_post_path("/api/games/import-directory/jobs/job-id/cancel")
         )

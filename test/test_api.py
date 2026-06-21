@@ -407,6 +407,32 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
 
+    def test_explain_position(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[1].id
+
+        with patch("src.api.generate_position_explanation") as generate:
+            generate.return_value = "7六歩は自然な初手です。"
+
+            response = self.api.explain_position(
+                position_id,
+                llm_command="fake-llm",
+            )
+
+        self.assertEqual(response["position"]["id"], position_id)
+        self.assertIn("SFEN:", response["prompt"])
+        self.assertEqual(response["explanation"], "7六歩は自然な初手です。")
+        generate.assert_called_once()
+
+    def test_explain_position_requires_llm_command(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        with self.assertRaises(ApiError) as context:
+            self.api.explain_position(position_id)
+
+        self.assertEqual(context.exception.status_code, 400)
+
     def test_empty_import_raises_api_error(self):
         with self.assertRaises(ApiError) as context:
             self.api.import_game("")
