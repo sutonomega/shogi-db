@@ -116,6 +116,18 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(response["materials"]["eval_delta"], -200)
         self.assertIn("着手前SFEN:", response["prompt"])
 
+        explain_response = self._post_json(
+            "/api/blunders/explain",
+            {
+                "game_id": 1,
+                "move_number": 3,
+                "llm_command": "python3 -c \"import sys; print('悪手解説:' + sys.stdin.read().splitlines()[0])\"",
+                "timeout": 5,
+            },
+        )
+        self.assertEqual(explain_response["materials"]["move"], "2g2f")
+        self.assertTrue(explain_response["explanation"].startswith("悪手解説:"))
+
     def test_import_endpoint_accepts_cp932_kif_body(self):
         import_response = self._post_bytes(
             "/api/games/import",

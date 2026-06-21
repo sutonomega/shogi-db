@@ -53,6 +53,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self._rebuild_openings_from_request(), 200)
                 return
 
+            if path == "/api/blunders/explain":
+                self._send_json(self._explain_blunder_from_request(), 200)
+                return
+
             if (
                 len(parts) == 6
                 and parts[0] == "api"
@@ -226,6 +230,28 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             timeout=float(timeout),
         )
 
+    def _explain_blunder_from_request(self) -> dict:
+        raw_body = self._read_body()
+        payload = _decode_json_payload(raw_body)
+        game_id = payload.get("game_id")
+        move_number = payload.get("move_number")
+        llm_command = payload.get("llm_command")
+        timeout = payload.get("timeout", 60.0)
+        if not isinstance(game_id, int):
+            raise ApiError("Request body field game_id must be integer", 400)
+        if not isinstance(move_number, int):
+            raise ApiError("Request body field move_number must be integer", 400)
+        if llm_command is not None and not isinstance(llm_command, str):
+            raise ApiError("Request body field llm_command must be string", 400)
+        if not isinstance(timeout, (int, float)):
+            raise ApiError("Request body field timeout must be number", 400)
+        return self.api.explain_blunder(
+            game_id,
+            move_number,
+            llm_command=llm_command,
+            timeout=float(timeout),
+        )
+
     def _read_body(self) -> bytes:
         content_length = int(self.headers.get("Content-Length", "0"))
         return self.rfile.read(content_length)
@@ -296,6 +322,7 @@ def is_import_post_path(path: str) -> bool:
     if path in (
         "/api/games/import",
         "/api/games/import-directory",
+        "/api/blunders/explain",
         "/api/openings/rebuild",
     ):
         return True

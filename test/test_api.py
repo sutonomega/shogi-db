@@ -266,6 +266,32 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
 
+    def test_explain_blunder(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        with patch("src.api.generate_position_explanation") as generate:
+            generate.return_value = "2六歩で評価値が下がりました。"
+
+            response = self.api.explain_blunder(
+                game_id,
+                3,
+                llm_command="fake-llm",
+            )
+
+        self.assertEqual(response["game"]["id"], game_id)
+        self.assertEqual(response["materials"]["move"], "2g2f")
+        self.assertIn("着手前SFEN:", response["prompt"])
+        self.assertEqual(response["explanation"], "2六歩で評価値が下がりました。")
+        generate.assert_called_once()
+
+    def test_explain_blunder_requires_llm_command(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        with self.assertRaises(ApiError) as context:
+            self.api.explain_blunder(game_id, 3)
+
+        self.assertEqual(context.exception.status_code, 400)
+
     def test_get_position_frequency(self):
         first_game = self.api.import_game(KIF_WITH_ANALYSIS)
         self.api.import_game(f"{KIF_WITH_ANALYSIS}\n# duplicate variation")

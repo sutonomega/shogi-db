@@ -187,6 +187,38 @@ class ShogiDbApi:
         }
 
     def get_blunder_explanation_prompt(self, game_id: int, move_number: int) -> dict:
+        return self._build_blunder_explanation_payload(game_id, move_number)
+
+    def explain_blunder(
+        self,
+        game_id: int,
+        move_number: int,
+        *,
+        llm_command: str | None = None,
+        timeout: float = 60.0,
+    ) -> dict:
+        resolved_command = llm_command or os.environ.get("SHOGI_DB_LLM_COMMAND")
+        if not resolved_command:
+            raise ApiError("LLM command is required", 400)
+
+        payload = self._build_blunder_explanation_payload(game_id, move_number)
+        try:
+            explanation = generate_position_explanation(
+                payload["prompt"],
+                llm_command=resolved_command,
+                timeout=timeout,
+            )
+        except PositionExplanationError as exc:
+            raise ApiError(str(exc), 500) from exc
+        except OSError as exc:
+            raise ApiError(str(exc), 500) from exc
+
+        return {
+            **payload,
+            "explanation": explanation,
+        }
+
+    def _build_blunder_explanation_payload(self, game_id: int, move_number: int) -> dict:
         game = self.repository.get_game(game_id)
         if game is None:
             raise ApiError(f"Game not found: {game_id}", 404)
