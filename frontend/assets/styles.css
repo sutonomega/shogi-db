@@ -288,6 +288,11 @@ input {
   font-size: 12px;
 }
 
+.stats-item small {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .stats-empty {
   margin: 0;
 }

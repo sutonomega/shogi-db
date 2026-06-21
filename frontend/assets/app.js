@@ -314,7 +314,7 @@ function renderBlunders() {
     item.appendChild(details);
 
     const record = document.createElement("small");
-    record.textContent = `${blunder.black} vs ${blunder.white} / ${blunder.eval_delta}`;
+    record.textContent = `${blunder.black} vs ${blunder.white} / ${blunder.eval_delta} / 発生 ${blunder.occurrence_count}回 ${blunder.game_count}局`;
     item.appendChild(record);
 
     const actions = document.createElement("div");

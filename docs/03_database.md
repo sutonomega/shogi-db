@@ -7,6 +7,7 @@
 | `games` | 対局情報 |
 | `positions` | 局面情報（手番ごと） |
 | `openings` | 定跡 DB |
+| `move_occurrences` | 局面ごとの指し手出現回数キャッシュ |
 
 ---
 
@@ -72,6 +73,27 @@ CREATE INDEX idx_positions_sfen    ON positions(sfen);
 `analyzed_at`, `engine_name`, `engine_depth` は Phase 4 以降の水匠解析連携で使用する。MVP では NULL のまま扱う。
 
 水匠解析では保存済み `positions.sfen` を USI エンジンに渡し、USI 出力から `eval`, `best_move`, `pv`, `candidates` を取得して同じ `positions` レコードへ追記する。解析時は `MultiPV` を 5 に設定し、USI の `multipv` 番号ごとの最新行を上位 5 件まで `candidates` に保存する。
+
+---
+
+## `move_occurrences` — 局面ごとの指し手出現回数キャッシュ
+
+悪手ランキングの各手について、同じ局面で同じ指し手が他の棋譜にも出ているかを高速に表示するためのキャッシュ。
+
+```sql
+CREATE TABLE move_occurrences (
+    sfen       TEXT NOT NULL,
+    move       TEXT NOT NULL,
+    count      INTEGER NOT NULL DEFAULT 0,
+    game_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (sfen, move)
+);
+
+CREATE INDEX idx_move_occurrences_sfen ON move_occurrences(sfen);
+```
+
+`sfen` は SFEN のうち盤面・手番・持ち駒の3要素だけを保存し、末尾の手数は除外する。`count` は同じ局面キーと指し手の出現回数、`game_count` はその指し手が出た対象棋譜数を表す。KIF の保存・置換時に再集計し、悪手ランキング表示時はこのテーブルを参照する。
 
 ---
 

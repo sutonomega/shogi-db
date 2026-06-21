@@ -102,6 +102,16 @@ class TestGameRepository(unittest.TestCase):
         self.assertIn("engine_name", {row["name"] for row in rows})
         self.assertIn("engine_depth", {row["name"] for row in rows})
 
+    def test_schema_has_move_occurrences_cache(self):
+        rows = self.repository.connection.execute(
+            "PRAGMA table_info(move_occurrences)"
+        ).fetchall()
+
+        self.assertEqual(
+            {"sfen", "move", "count", "game_count", "updated_at"},
+            {row["name"] for row in rows},
+        )
+
     def test_save_strategy(self):
         game_id = self.repository.save_game(
             self.game,
@@ -178,8 +188,80 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(blunders[0].eval_after, 50)
         self.assertEqual(blunders[0].eval_delta, -250)
         self.assertEqual(blunders[0].loss, 250)
+        self.assertEqual(blunders[0].occurrence_count, 1)
+        self.assertEqual(blunders[0].game_count, 1)
         self.assertEqual(blunders[1].move_number, 2)
         self.assertEqual(blunders[1].eval_delta, -200)
+
+    def test_list_blunders_counts_same_position_move_occurrences(self):
+        first_positions = [
+            position(0, None, 0),
+            position(1, "7g7f", 100),
+            position(2, "3c3d", 300),
+            position(3, "2g2f", 50),
+        ]
+        second_positions = [
+            position(0, None, 0),
+            position(1, "7g7f", 50),
+            position(2, "8c8d", 160),
+            position(3, "2g2f", -40),
+        ]
+        third_positions = [
+            position(0, None, 0),
+            position(1, "5i6h", 10),
+            position(2, "3c3d", 90),
+        ]
+        self.repository.save_game(self.game, first_positions)
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#2"),
+            second_positions,
+        )
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#3"),
+            third_positions,
+        )
+
+        blunders = self.repository.list_blunders()
+
+        self.assertEqual(blunders[0].move, "2g2f")
+        self.assertEqual(blunders[0].occurrence_count, 2)
+        self.assertEqual(blunders[0].game_count, 2)
+        self.assertEqual(blunders[1].move, "3c3d")
+        self.assertEqual(blunders[1].occurrence_count, 2)
+        self.assertEqual(blunders[1].game_count, 2)
+        self.assertEqual(blunders[2].move, "2g2f")
+        self.assertEqual(blunders[2].occurrence_count, 2)
+        self.assertEqual(blunders[2].game_count, 2)
+
+    def test_list_blunders_ignores_sfen_move_count_for_occurrences(self):
+        first_positions = [
+            opening_position(0, "same-board b - 1", None, 100),
+            opening_position(1, "after 2g2f w - 2", "2g2f", -100),
+        ]
+        second_positions = [
+            opening_position(0, "same-board b - 9", None, 80),
+            opening_position(1, "after 2g2f w - 10", "2g2f", -120),
+        ]
+        self.repository.save_game(self.game, first_positions)
+        self.repository.save_game(
+            replace(self.game, raw_kif=f"{self.game.raw_kif}\n#2"),
+            second_positions,
+        )
+
+        blunders = self.repository.list_blunders()
+        cached = self.repository.connection.execute(
+            """
+            SELECT sfen, move, count, game_count
+            FROM move_occurrences
+            WHERE move = '2g2f'
+            """
+        ).fetchone()
+
+        self.assertEqual(blunders[0].occurrence_count, 2)
+        self.assertEqual(blunders[0].game_count, 2)
+        self.assertEqual(cached["sfen"], "same-board b -")
+        self.assertEqual(cached["count"], 2)
+        self.assertEqual(cached["game_count"], 2)
 
     def test_save_positions_with_sfen_and_analysis(self):
         game_id = self.repository.save_game(self.game, self.positions)
@@ -262,6 +344,34 @@ class TestGameRepository(unittest.TestCase):
             (game_id,),
         ).fetchone()["count"]
         self.assertEqual(count, len(self.positions))
+
+    def test_duplicate_raw_kif_refreshes_move_occurrences_cache(self):
+        start_sfen = "startpos b - 1"
+        first_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, "after 7g7f w - 2", "7g7f", 100),
+        ]
+        replacement_positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, "after 2g2f w - 2", "2g2f", 100),
+        ]
+        self.repository.save_game(self.game, first_positions)
+
+        self.repository.save_game(self.game, replacement_positions)
+
+        rows = self.repository.connection.execute(
+            """
+            SELECT move, count, game_count
+            FROM move_occurrences
+            WHERE sfen = ?
+            ORDER BY move
+            """,
+            ("startpos b -",),
+        ).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["move"], "2g2f")
+        self.assertEqual(rows[0]["count"], 1)
+        self.assertEqual(rows[0]["game_count"], 1)
 
     def test_list_games_does_not_load_raw_kif_body(self):
         game_id = self.repository.save_game(self.game, self.positions)

@@ -556,6 +556,8 @@ class ShogiDbApi:
             "eval_after": record.eval_after,
             "eval_delta": record.eval_delta,
             "loss": record.loss,
+            "occurrence_count": record.occurrence_count,
+            "game_count": record.game_count,
         }
 
     def _move_frequency_to_dict(
