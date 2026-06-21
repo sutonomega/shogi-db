@@ -4,6 +4,13 @@
 
 from __future__ import annotations
 
+import shlex
+import subprocess
+
+
+class PositionExplanationError(RuntimeError):
+    pass
+
 
 def build_position_explanation_prompt(materials: dict) -> str:
     missing = materials.get("missing", [])
@@ -61,6 +68,44 @@ def build_position_explanation_materials(
     }
     materials["missing"] = _missing_fields(materials)
     return materials
+
+
+def generate_position_explanation(
+    prompt: str,
+    *,
+    llm_command: str,
+    timeout: float = 60.0,
+) -> str:
+    if not prompt.strip():
+        raise PositionExplanationError("Explanation prompt is empty")
+    if not llm_command.strip():
+        raise PositionExplanationError("LLM command is empty")
+
+    try:
+        process = subprocess.run(
+            shlex.split(llm_command),
+            input=prompt,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except ValueError as exc:
+        raise PositionExplanationError(str(exc)) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise PositionExplanationError("LLM command timed out") from exc
+
+    if process.returncode != 0:
+        stderr = process.stderr.strip()
+        message = stderr or f"LLM command failed with exit code {process.returncode}"
+        raise PositionExplanationError(message)
+
+    explanation = process.stdout.strip()
+    if not explanation:
+        raise PositionExplanationError("LLM command returned empty output")
+    return explanation
 
 
 def _missing_fields(materials: dict) -> list[str]:
