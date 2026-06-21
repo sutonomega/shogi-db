@@ -71,7 +71,7 @@ CREATE INDEX idx_positions_sfen    ON positions(sfen);
 
 `analyzed_at`, `engine_name`, `engine_depth` は Phase 4 以降の水匠解析連携で使用する。MVP では NULL のまま扱う。
 
-水匠解析では保存済み `positions.sfen` を USI エンジンに渡し、USI 出力から `eval`, `best_move`, `pv`, `candidates` を取得して同じ `positions` レコードへ追記する。
+水匠解析では保存済み `positions.sfen` を USI エンジンに渡し、USI 出力から `eval`, `best_move`, `pv`, `candidates` を取得して同じ `positions` レコードへ追記する。解析時は `MultiPV` を 5 に設定し、USI の `multipv` 番号ごとの最新行を上位 5 件まで `candidates` に保存する。
 
 ---
 

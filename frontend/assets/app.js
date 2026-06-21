@@ -25,6 +25,8 @@ const state = {
   query: "",
   currentMove: 0,
   selectedCandidateMove: null,
+  candidateAnalysisStatus: "idle",
+  candidateStatusText: "候補手は水匠解析付きKIFまたは局面解析後に表示されます",
 };
 
 const pieceLabels = {
@@ -115,6 +117,8 @@ const positionEval = document.querySelector("#positionEval");
 const positionSfen = document.querySelector("#positionSfen");
 const candidateList = document.querySelector("#candidateList");
 const candidateSummary = document.querySelector("#candidateSummary");
+const candidateStatus = document.querySelector("#candidateStatus");
+const analyzeCandidateButton = document.querySelector("#analyzeCandidateButton");
 const evalGraph = document.querySelector("#evalGraph");
 const evalSummary = document.querySelector("#evalSummary");
 const evalGraphStatus = document.querySelector("#evalGraphStatus");
@@ -622,11 +626,14 @@ function renderEngineCandidates(position) {
     : null;
   const candidates = Array.isArray(position?.candidates) ? position.candidates.slice(0, 5) : [];
   candidateSummary.textContent = `${candidates.length}件`;
+  candidateStatus.textContent = state.candidateStatusText;
+  analyzeCandidateButton.disabled = !position?.id || state.candidateAnalysisStatus === "running";
+  analyzeCandidateButton.textContent = state.candidateAnalysisStatus === "running" ? "解析中" : "この局面を解析";
 
   if (!candidates.length) {
     const empty = document.createElement("p");
     empty.className = "candidate-empty";
-    empty.textContent = "候補手データはありません";
+    empty.textContent = "候補手データはありません。水匠解析付きKIFを取り込むか、この局面を解析してください。";
     candidateList.appendChild(empty);
     return;
   }
@@ -1360,6 +1367,44 @@ async function generateExplanation() {
   }
 }
 
+async function analyzeCurrentPositionForCandidates() {
+  const position = state.positions[state.currentMove];
+  if (!position?.id || state.candidateAnalysisStatus === "running") return;
+
+  state.candidateAnalysisStatus = "running";
+  state.candidateStatusText = "局面を解析中です";
+  renderEngineCandidates(position);
+  setStatus("局面を解析中");
+
+  try {
+    const response = await fetch(`/api/positions/${position.id}/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    if (payload.position) {
+      state.positions[state.currentMove] = payload.position;
+    }
+    state.selectedCandidateMove = null;
+    state.candidateStatusText = "局面解析が完了しました";
+    setStatus("局面解析が完了しました");
+    renderBoard();
+  } catch (error) {
+    state.candidateStatusText = `局面解析に失敗しました: ${error.message}`;
+    setStatus(`局面解析に失敗しました: ${error.message}`, "error");
+    renderEngineCandidates(position);
+  } finally {
+    state.candidateAnalysisStatus = "idle";
+    renderEngineCandidates(state.positions[state.currentMove]);
+  }
+}
+
 async function importKifFile(file) {
   importButton.disabled = true;
   setStatus("取り込み中");
@@ -1515,6 +1560,7 @@ buildOpeningComparisonButton.addEventListener("click", loadOpeningComparisonProm
 generateOpeningComparisonButton.addEventListener("click", generateOpeningComparison);
 buildExplanationPromptButton.addEventListener("click", loadExplanationPrompt);
 generateExplanationButton.addEventListener("click", generateExplanation);
+analyzeCandidateButton.addEventListener("click", analyzeCurrentPositionForCandidates);
 
 refreshButton.addEventListener("click", () => {
   loadGames();

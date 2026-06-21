@@ -164,8 +164,12 @@
           <section class="candidate-panel" aria-label="エンジン候補手">
             <div class="panel-heading">
               <h3>エンジン候補手</h3>
-              <span id="candidateSummary">0件</span>
+              <div class="panel-heading-actions">
+                <span id="candidateSummary">0件</span>
+                <button id="analyzeCandidateButton" type="button">この局面を解析</button>
+              </div>
             </div>
+            <p class="candidate-status" id="candidateStatus">候補手は水匠解析付きKIFまたは局面解析後に表示されます</p>
             <div class="candidate-list" id="candidateList"></div>
           </section>
           <dl>

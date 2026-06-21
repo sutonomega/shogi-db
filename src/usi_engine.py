@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 
 MATE_EVAL = 100_000
+MAX_CANDIDATES = 5
 
 
 @dataclass
@@ -30,6 +31,7 @@ class UsiEngineAnalyzer:
     _RE_INFO = re.compile(r"\binfo\b.*\bscore\s+(cp|mate)\s+([+-]?\d+).*?(?:\bpv\s+(.+))?$")
     _RE_BESTMOVE = re.compile(r"^bestmove\s+(\S+)")
     _RE_NAME = re.compile(r"^id\s+name\s+(.+)")
+    _RE_MULTIPV = re.compile(r"\bmultipv\s+(\d+)")
 
     def __init__(
         self,
@@ -68,6 +70,7 @@ class UsiEngineAnalyzer:
         try:
             self._send(process, "usi")
             lines.extend(self._read_until(process, "usiok"))
+            self._send(process, f"setoption name MultiPV value {MAX_CANDIDATES}")
             self._send(process, "isready")
             lines.extend(self._read_until(process, "readyok"))
             self._send(process, f"position sfen {sfen}")
@@ -117,7 +120,7 @@ def parse_usi_analysis(
     latest_eval: int | None = None
     latest_pv: str | None = None
     best_move: str | None = None
-    candidates: list[dict] = []
+    candidates_by_rank: dict[int, dict] = {}
 
     for line in lines:
         name_match = UsiEngineAnalyzer._RE_NAME.match(line)
@@ -127,13 +130,18 @@ def parse_usi_analysis(
 
         info_match = UsiEngineAnalyzer._RE_INFO.match(line)
         if info_match:
-            latest_eval = _score_to_eval(info_match.group(1), info_match.group(2))
-            latest_pv = info_match.group(3).strip() if info_match.group(3) else None
-            if latest_pv:
-                candidates.append({
-                    "move": latest_pv.split()[0],
-                    "eval": latest_eval,
-                })
+            eval_value = _score_to_eval(info_match.group(1), info_match.group(2))
+            pv = info_match.group(3).strip() if info_match.group(3) else None
+            multipv_match = UsiEngineAnalyzer._RE_MULTIPV.search(line)
+            multipv = int(multipv_match.group(1)) if multipv_match else 1
+            if multipv == 1:
+                latest_eval = eval_value
+                latest_pv = pv
+            if pv:
+                candidates_by_rank[multipv] = {
+                    "move": pv.split()[0],
+                    "eval": eval_value,
+                }
             continue
 
         bestmove_match = UsiEngineAnalyzer._RE_BESTMOVE.match(line)
@@ -147,7 +155,10 @@ def parse_usi_analysis(
         eval=latest_eval,
         best_move=best_move,
         pv=latest_pv,
-        candidates=candidates[-1:] if candidates else [],
+        candidates=[
+            candidate
+            for _, candidate in sorted(candidates_by_rank.items())
+        ][:MAX_CANDIDATES],
         engine_name=parsed_engine_name or "USI Engine",
         engine_depth=requested_depth,
     )
