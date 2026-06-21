@@ -135,6 +135,73 @@ class ShogiDbApi:
             "games": imported_games,
         }
 
+    def import_opening_games_from_directory(
+        self,
+        directory_path: str,
+        *,
+        source: str = "professional",
+        recursive: bool = False,
+        progress_callback=None,
+        should_cancel=None,
+    ) -> dict:
+        if not directory_path.strip():
+            raise ApiError("Directory path is empty", 400)
+        if not source.strip():
+            raise ApiError("Opening source is empty", 400)
+        directory = Path(directory_path).expanduser()
+        if not directory.is_dir():
+            raise ApiError(f"Directory not found: {directory_path}", 400)
+
+        total = self.count_kif_files(directory, recursive=recursive)
+        processed = 0
+        imported = 0
+        openings_count = 0
+        errors = []
+        imported_openings = []
+        if progress_callback is not None:
+            progress_callback(processed, total)
+
+        for file_path in self._iter_kif_files(directory, recursive=recursive):
+            if should_cancel is not None and should_cancel():
+                break
+            try:
+                response = self.import_opening_game_bytes(
+                    file_path.read_bytes(),
+                    source=source,
+                )
+            except Exception as exc:
+                errors.append({
+                    "path": str(file_path),
+                    "error": str(exc),
+                })
+                processed += 1
+                if progress_callback is not None:
+                    progress_callback(processed, total)
+                continue
+
+            imported += 1
+            openings_count += response["count"]
+            imported_openings.append({
+                "path": str(file_path),
+                "count": response["count"],
+            })
+            processed += 1
+            if progress_callback is not None:
+                progress_callback(processed, total)
+
+        return {
+            "path": str(directory),
+            "source": source,
+            "recursive": recursive,
+            "total": total,
+            "processed": processed,
+            "imported": imported,
+            "failed": len(errors),
+            "errors": errors,
+            "openings_count": openings_count,
+            "openings": imported_openings,
+        }
+
     def list_games(self) -> dict:
         return {
             "games": [
@@ -287,6 +354,37 @@ class ShogiDbApi:
                 for opening in openings
             ],
         }
+
+    def import_opening_game(self, kif_text: str, source: str = "professional") -> dict:
+        if not kif_text.strip():
+            raise ApiError("KIF text is empty", 400)
+        if not source.strip():
+            raise ApiError("Opening source is empty", 400)
+
+        game = KifParser().parse(kif_text)
+        positions = SfenGenerator().generate(game)
+        openings = OpeningAggregator(self.repository).aggregate_positions(
+            positions,
+            source=source,
+        )
+        self.repository.add_opening_aggregates(openings)
+        return {
+            "source": source,
+            "count": len(openings),
+            "openings": [
+                self._opening_to_dict(opening)
+                for opening in openings
+            ],
+        }
+
+    def import_opening_game_bytes(
+        self,
+        kif_data: bytes,
+        source: str = "professional",
+    ) -> dict:
+        if not kif_data.strip():
+            raise ApiError("KIF file is empty", 400)
+        return self.import_opening_game(decode_kif_bytes(kif_data), source=source)
 
     def get_openings(self, sfen: str, source: str = "self") -> dict:
         if not sfen.strip():
@@ -469,7 +567,7 @@ class ShogiDbApi:
         openings = [
             self._opening_to_dict(opening, total=None)
             for opening in self.repository.list_openings(
-                source="self",
+                source="professional",
                 sfen=position.sfen,
             )
         ]
@@ -550,6 +648,7 @@ class ShogiDbApi:
             "game_id": record.game_id,
             "move_number": record.move_number,
             "move": record.move,
+            "previous_sfen": record.previous_sfen,
             "black": record.black,
             "white": record.white,
             "eval_before": record.eval_before,

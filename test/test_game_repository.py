@@ -184,6 +184,7 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(len(blunders), 2)
         self.assertEqual(blunders[0].move_number, 3)
         self.assertEqual(blunders[0].move, "2g2f")
+        self.assertIn(" b ", blunders[0].previous_sfen)
         self.assertEqual(blunders[0].eval_before, 300)
         self.assertEqual(blunders[0].eval_after, 50)
         self.assertEqual(blunders[0].eval_delta, -250)

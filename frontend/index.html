@@ -24,25 +24,58 @@
           <span>検索</span>
           <input id="searchInput" type="search" autocomplete="off" placeholder="先手・後手・勝敗" />
         </label>
-        <form class="import-form" id="importForm" aria-label="KIFファイル取込">
-          <input id="kifFileInput" type="file" accept=".kif,text/plain,application/octet-stream" />
-          <label class="file-picker" for="kifFileInput">KIF選択</label>
-          <span id="importFileName">未選択</span>
-          <button id="importButton" type="submit" disabled>取り込み</button>
-        </form>
-        <form class="directory-import-form" id="directoryImportForm" aria-label="KIFフォルダ一括取込">
-          <input id="directoryPathInput" type="text" autocomplete="off" placeholder="/data/share/2mkif" />
-          <label class="checkbox-field">
-            <input id="recursiveImportInput" type="checkbox" />
-            <span>再帰</span>
-          </label>
-          <button id="directoryImportButton" type="submit">一括取込</button>
-          <button id="cancelDirectoryImportButton" type="button" hidden>キャンセル</button>
-        </form>
         <div class="summary" id="summaryText">0局</div>
       </section>
 
       <section class="status-panel" id="statusPanel" hidden></section>
+
+      <section class="management-panel" id="gameRegistrationPanel" aria-label="棋譜登録">
+        <div class="panel-heading">
+          <h2>棋譜登録</h2>
+          <span>自分の棋譜</span>
+        </div>
+        <div class="registration-controls">
+          <form class="import-form" id="importForm" aria-label="KIFファイル登録">
+            <input id="kifFileInput" type="file" accept=".kif,text/plain,application/octet-stream" />
+            <label class="file-picker" for="kifFileInput">KIF選択</label>
+            <span id="importFileName">未選択</span>
+            <button id="importButton" type="submit" disabled>登録</button>
+          </form>
+          <form class="directory-import-form" id="directoryImportForm" aria-label="KIFフォルダ一括登録">
+            <input id="directoryPathInput" type="text" autocomplete="off" placeholder="/data/share/2mkif" />
+            <label class="checkbox-field">
+              <input id="recursiveImportInput" type="checkbox" />
+              <span>再帰</span>
+            </label>
+            <button id="directoryImportButton" type="submit">一括登録</button>
+            <button id="cancelDirectoryImportButton" type="button" hidden>キャンセル</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="management-panel" id="openingManagementPanel" aria-label="定跡登録">
+        <div class="panel-heading">
+          <h2>定跡登録</h2>
+          <span id="openingManagementSummary">定跡として登録する棋譜</span>
+        </div>
+        <div class="registration-controls">
+          <form class="opening-import-form" id="openingImportForm" aria-label="定跡KIF登録">
+            <input id="openingFileInput" type="file" accept=".kif,text/plain,application/octet-stream" />
+            <label class="file-picker" for="openingFileInput">KIF選択</label>
+            <span id="openingFileName">未選択</span>
+            <button id="openingImportButton" type="submit" disabled>登録</button>
+          </form>
+          <form class="opening-directory-import-form" id="openingDirectoryImportForm" aria-label="定跡KIFフォルダ一括登録">
+            <input id="openingDirectoryPathInput" type="text" autocomplete="off" placeholder="/data/share/opening-kif" />
+            <label class="checkbox-field">
+              <input id="openingRecursiveImportInput" type="checkbox" />
+              <span>再帰</span>
+            </label>
+            <button id="openingDirectoryImportButton" type="submit">一括登録</button>
+            <button id="openingCancelDirectoryImportButton" type="button" hidden>キャンセル</button>
+          </form>
+        </div>
+      </section>
 
       <section class="stats-panel" id="strategyStatsPanel" aria-label="戦法別集計">
         <div class="panel-heading">
@@ -125,13 +158,10 @@
             </div>
             <div class="move-frequency-list" id="moveFrequencyList"></div>
           </section>
-          <section class="opening-panel" aria-label="自分専用定跡">
+          <section class="opening-panel" aria-label="定跡">
             <div class="panel-heading">
-              <h3>自分専用定跡</h3>
-              <div class="panel-heading-actions">
-                <span id="openingSummary">0回</span>
-                <button id="rebuildOpeningsButton" type="button">更新</button>
-              </div>
+              <h3>定跡</h3>
+              <span id="openingSummary">0回</span>
             </div>
             <div class="opening-list" id="openingList"></div>
           </section>

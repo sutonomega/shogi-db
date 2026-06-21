@@ -10,11 +10,14 @@ from urllib.request import Request, urlopen
 
 from src.api_server import (
     DirectoryImportJobStore,
+    OpeningDirectoryImportJobStore,
     create_server,
     import_directory_payload,
     import_game_payload,
+    import_opening_directory_payload,
     is_import_post_path,
     start_import_directory_payload,
+    start_opening_import_directory_payload,
 )
 from src.api import ShogiDbApi
 from src.game_repository import GameRepository
@@ -70,6 +73,13 @@ class TestApiServer(unittest.TestCase):
         blunders_response = self._get_json("/api/stats/blunders")
         self.assertEqual(blunders_response["blunders"], [])
 
+        opening_import_response = self._post_bytes(
+            "/api/openings/import?source=professional",
+            KIF_TEXT.encode("utf-8"),
+            "application/octet-stream",
+        )
+        self.assertEqual(opening_import_response["source"], "professional")
+
         positions_response = self._get_json("/api/games/1/positions")
         self.assertEqual(len(positions_response["positions"]), 3)
         self.assertEqual(positions_response["positions"][1]["move"], "7g7f")
@@ -85,7 +95,7 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(comparison_response["position"]["id"], 1)
         self.assertEqual(comparison_response["sources"], ["self", "professional"])
         self.assertIn("source別定跡候補:", comparison_response["prompt"])
-        self.assertIn("定跡候補:professional", comparison_response["materials"]["missing"])
+        self.assertIn("定跡候補:self", comparison_response["materials"]["missing"])
 
         comparison_explain_response = self._post_json(
             "/api/positions/1/opening-comparison-explain",
@@ -107,6 +117,33 @@ class TestApiServer(unittest.TestCase):
         )
         self.assertEqual(explain_response["position"]["id"], 1)
         self.assertTrue(explain_response["explanation"].startswith("解説:"))
+
+    def test_opening_import_directory_endpoint_tracks_progress(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+
+            job = self._post_json(
+                "/api/openings/import-directory",
+                {
+                    "path": str(directory),
+                    "recursive": False,
+                    "source": "professional",
+                    "async": True,
+                },
+            )
+            for _ in range(100):
+                job = self._get_json(f"/api/openings/import-directory/jobs/{job['id']}")
+                if job["done"]:
+                    break
+                sleep(0.01)
+
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["source"], "professional")
+        self.assertEqual(job["processed"], 1)
+        self.assertEqual(job["total"], 1)
+        self.assertEqual(job["imported"], 1)
+        self.assertGreater(job["openings_count"], 0)
 
     def test_blunder_explanation_prompt_endpoint(self):
         kif_text = """\
@@ -237,6 +274,25 @@ class TestImportGamePayload(unittest.TestCase):
                 {"recursive": False},
             )
 
+    def test_import_opening_directory_payload(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+
+            response = import_opening_directory_payload(
+                self.api,
+                {
+                    "path": str(directory),
+                    "recursive": False,
+                    "source": "professional",
+                },
+            )
+
+        self.assertEqual(response["source"], "professional")
+        self.assertEqual(response["total"], 1)
+        self.assertEqual(response["imported"], 1)
+        self.assertGreater(response["openings_count"], 0)
+
     def test_start_import_directory_payload_tracks_progress(self):
         with TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
@@ -258,6 +314,33 @@ class TestImportGamePayload(unittest.TestCase):
         self.assertEqual(job["total"], 1)
         self.assertEqual(job["imported"], 1)
 
+    def test_start_opening_import_directory_payload_tracks_progress(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+            job_store = OpeningDirectoryImportJobStore(self.api)
+
+            job = start_opening_import_directory_payload(
+                job_store,
+                {
+                    "path": str(directory),
+                    "recursive": False,
+                    "source": "professional",
+                },
+            )
+            for _ in range(100):
+                job = job_store.get(job["id"])
+                if job["done"]:
+                    break
+                sleep(0.01)
+
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["source"], "professional")
+        self.assertEqual(job["processed"], 1)
+        self.assertEqual(job["total"], 1)
+        self.assertEqual(job["imported"], 1)
+        self.assertGreater(job["openings_count"], 0)
+
     def test_import_directory_job_can_be_canceled(self):
         with TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
@@ -269,14 +352,30 @@ class TestImportGamePayload(unittest.TestCase):
 
         self.assertIn(canceled["status"], ("canceling", "completed"))
 
+    def test_opening_import_directory_job_can_be_canceled(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "game.kif").write_bytes(KIF_TEXT.encode("cp932"))
+            job_store = OpeningDirectoryImportJobStore(self.api)
+
+            job = job_store.start(str(directory), source="professional", recursive=False)
+            canceled = job_store.cancel(job["id"])
+
+        self.assertIn(canceled["status"], ("canceling", "completed"))
+
     def test_import_post_path_accepts_directory_cancel_endpoint(self):
         self.assertTrue(is_import_post_path("/api/games/import"))
         self.assertTrue(is_import_post_path("/api/games/import-directory"))
+        self.assertTrue(is_import_post_path("/api/openings/import"))
+        self.assertTrue(is_import_post_path("/api/openings/import-directory"))
         self.assertTrue(is_import_post_path("/api/openings/rebuild"))
         self.assertTrue(is_import_post_path("/api/positions/123/analyze"))
         self.assertTrue(is_import_post_path("/api/positions/123/explain"))
         self.assertTrue(
             is_import_post_path("/api/games/import-directory/jobs/job-id/cancel")
+        )
+        self.assertTrue(
+            is_import_post_path("/api/openings/import-directory/jobs/job-id/cancel")
         )
         self.assertFalse(is_import_post_path("/api/games/import-directory/jobs/job-id"))
 
