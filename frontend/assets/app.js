@@ -3,6 +3,7 @@ const state = {
   strategyStats: [],
   enclosureStats: [],
   blunders: [],
+  blunderExplanations: {},
   positions: [],
   moveFrequencies: [],
   moveFrequencyTotal: 0,
@@ -256,6 +257,8 @@ function renderBlunders() {
   }
 
   for (const blunder of state.blunders) {
+    const key = blunderKey(blunder);
+    const explanation = state.blunderExplanations[key] || {};
     const item = document.createElement("article");
     item.className = "stats-item";
 
@@ -271,8 +274,29 @@ function renderBlunders() {
     record.textContent = `${blunder.black} vs ${blunder.white} / ${blunder.eval_delta}`;
     item.appendChild(record);
 
+    const actions = document.createElement("div");
+    actions.className = "stats-item-actions";
+    const explainButton = document.createElement("button");
+    explainButton.type = "button";
+    explainButton.textContent = explanation.status === "生成中" ? "生成中" : "理由生成";
+    explainButton.disabled = explanation.status === "生成中";
+    explainButton.addEventListener("click", () => generateBlunderExplanation(blunder));
+    actions.appendChild(explainButton);
+    item.appendChild(actions);
+
+    if (explanation.status || explanation.text) {
+      const explanationBlock = document.createElement("pre");
+      explanationBlock.className = "blunder-explanation-output";
+      explanationBlock.textContent = explanation.text || explanation.status;
+      item.appendChild(explanationBlock);
+    }
+
     blunderList.appendChild(item);
   }
+}
+
+function blunderKey(blunder) {
+  return `${blunder.game_id}:${blunder.move_number}`;
 }
 
 function renderMoveFrequencies() {
@@ -786,14 +810,57 @@ async function loadStats() {
     state.strategyStats = Array.isArray(strategyStatsPayload.strategies) ? strategyStatsPayload.strategies : [];
     state.enclosureStats = Array.isArray(enclosureStatsPayload.enclosures) ? enclosureStatsPayload.enclosures : [];
     state.blunders = Array.isArray(blundersPayload.blunders) ? blundersPayload.blunders : [];
+    state.blunderExplanations = {};
   } catch (error) {
     state.strategyStats = [];
     state.enclosureStats = [];
     state.blunders = [];
+    state.blunderExplanations = {};
     setStatus(`統計情報を取得できませんでした: ${error.message}`, "error");
   } finally {
     renderStrategyStats();
     renderEnclosureStats();
+    renderBlunders();
+  }
+}
+
+async function generateBlunderExplanation(blunder) {
+  const key = blunderKey(blunder);
+  state.blunderExplanations = {
+    ...state.blunderExplanations,
+    [key]: { status: "生成中", text: "" },
+  };
+  renderBlunders();
+
+  try {
+    const response = await fetch("/api/blunders/explain", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        game_id: blunder.game_id,
+        move_number: blunder.move_number,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    state.blunderExplanations = {
+      ...state.blunderExplanations,
+      [key]: {
+        status: "生成済み",
+        text: typeof payload.explanation === "string" ? payload.explanation : "",
+      },
+    };
+  } catch (error) {
+    state.blunderExplanations = {
+      ...state.blunderExplanations,
+      [key]: { status: "失敗", text: "" },
+    };
+    setStatus(`悪手理由解説を生成できませんでした: ${error.message}`, "error");
+  } finally {
     renderBlunders();
   }
 }
