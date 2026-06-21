@@ -28,9 +28,51 @@ class TestBlunderExplanation(unittest.TestCase):
 
         self.assertEqual(materials["eval_delta"], -200)
         self.assertEqual(materials["loss"], 200)
+        self.assertEqual(materials["severity"], "brief")
+        self.assertIn("簡易解説", materials["explanation_policy"])
         self.assertEqual(materials["sfen_before"], "before")
         self.assertEqual(materials["sfen_after"], "after")
         self.assertEqual(materials["missing"], [])
+
+    def test_build_materials_marks_small_loss_as_not_explainable(self):
+        materials = build_blunder_explanation_materials(
+            {"black": "先手", "white": "後手"},
+            {
+                "move_number": 2,
+                "sfen": "before",
+                "eval": 80,
+            },
+            {
+                "move_number": 3,
+                "move": "2g2f",
+                "sfen": "after",
+                "eval": -50,
+            },
+        )
+
+        self.assertEqual(materials["loss"], 130)
+        self.assertEqual(materials["severity"], "none")
+        self.assertIn("悪手理由を無理に作らない", materials["explanation_policy"])
+
+    def test_build_materials_marks_large_loss_as_detailed(self):
+        materials = build_blunder_explanation_materials(
+            {"black": "先手", "white": "後手"},
+            {
+                "move_number": 2,
+                "sfen": "before",
+                "eval": 80,
+            },
+            {
+                "move_number": 3,
+                "move": "2g2f",
+                "sfen": "after",
+                "eval": -500,
+            },
+        )
+
+        self.assertEqual(materials["loss"], 580)
+        self.assertEqual(materials["severity"], "detailed")
+        self.assertIn("詳細に解説", materials["explanation_policy"])
 
     def test_build_prompt_requires_grounded_blunder_reasoning(self):
         materials = build_blunder_explanation_materials(
@@ -59,6 +101,8 @@ class TestBlunderExplanation(unittest.TestCase):
         self.assertIn("着手前SFEN: before", prompt)
         self.assertIn("着手後SFEN: after", prompt)
         self.assertIn("評価値変化: -200", prompt)
+        self.assertIn("解説粒度: brief", prompt)
+        self.assertIn("解説方針: 200点以上500点未満", prompt)
         self.assertIn("不足項目: 最善手、読み筋、候補手", prompt)
 
 

@@ -254,6 +254,7 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["materials"]["eval_after"], -120)
         self.assertEqual(response["materials"]["eval_delta"], -200)
         self.assertEqual(response["materials"]["loss"], 200)
+        self.assertEqual(response["materials"]["severity"], "brief")
         self.assertIn("着手前SFEN:", response["prompt"])
         self.assertIn("着手後SFEN:", response["prompt"])
         self.assertIn("推測として考えられる悪手理由", response["prompt"])
@@ -283,6 +284,25 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertIn("着手前SFEN:", response["prompt"])
         self.assertEqual(response["explanation"], "2六歩で評価値が下がりました。")
         generate.assert_called_once()
+
+    def test_explain_blunder_skips_small_eval_change(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+        self.repository.connection.execute(
+            "UPDATE positions SET eval = ? WHERE game_id = ? AND move_number = ?",
+            (0, game_id, 3),
+        )
+
+        with patch("src.api.generate_position_explanation") as generate:
+            with self.assertRaises(ApiError) as context:
+                self.api.explain_blunder(
+                    game_id,
+                    3,
+                    llm_command="fake-llm",
+                )
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertIn("too small", str(context.exception))
+        generate.assert_not_called()
 
     def test_explain_blunder_requires_llm_command(self):
         game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
