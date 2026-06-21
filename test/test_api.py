@@ -373,6 +373,40 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_get_position_explanation_prompt(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        self.api.rebuild_openings()
+        position_id = self.repository.list_positions(game_id)[1].id
+
+        response = self.api.get_position_explanation_prompt(position_id)
+
+        self.assertEqual(response["position"]["id"], position_id)
+        self.assertEqual(response["materials"]["eval"], 64)
+        self.assertEqual(response["materials"]["best_move"], "7g7f")
+        self.assertEqual(response["materials"]["candidates"][0]["move"], "2g2f")
+        self.assertEqual(response["materials"]["openings"][0]["move"], "3c3d")
+        self.assertNotIn("評価値", response["materials"]["missing"])
+        self.assertIn("SFEN:", response["prompt"])
+        self.assertIn("実戦手: 7g7f", response["prompt"])
+        self.assertIn("候補手: 2g2f(+55)", response["prompt"])
+
+    def test_get_position_explanation_prompt_marks_missing_materials(self):
+        game_id = self.api.import_game(SHIKENBISHA_KIF)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        response = self.api.get_position_explanation_prompt(position_id)
+
+        self.assertIn("評価値", response["materials"]["missing"])
+        self.assertIn("候補手", response["materials"]["missing"])
+        self.assertIn("評価値: なし", response["prompt"])
+        self.assertIn("候補手: なし", response["prompt"])
+
+    def test_get_position_explanation_prompt_missing_position_raises_404(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.get_position_explanation_prompt(999)
+
+        self.assertEqual(context.exception.status_code, 404)
+
     def test_empty_import_raises_api_error(self):
         with self.assertRaises(ApiError) as context:
             self.api.import_game("")

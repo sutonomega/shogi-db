@@ -20,6 +20,10 @@ from .game_repository import (
 from .kif_encoding import decode_kif_bytes
 from .kif_parser import KifParser
 from .opening_aggregator import OpeningAggregator
+from .position_explanation import (
+    build_position_explanation_materials,
+    build_position_explanation_prompt,
+)
 from .sfen_generator import SfenGenerator
 from .strategy_detector import StrategyDetector
 from .usi_engine import UsiEngineAnalyzer, UsiEngineError
@@ -261,6 +265,26 @@ class ShogiDbApi:
 
         return {
             "position": self._position_to_dict(stored),
+        }
+
+    def get_position_explanation_prompt(self, position_id: int) -> dict:
+        position = self.repository.get_position(position_id)
+        if position is None:
+            raise ApiError(f"Position not found: {position_id}", 404)
+
+        position_data = self._position_to_dict(position)
+        openings = [
+            self._opening_to_dict(opening, total=None)
+            for opening in self.repository.list_openings(
+                source="self",
+                sfen=position.sfen,
+            )
+        ]
+        materials = build_position_explanation_materials(position_data, openings)
+        return {
+            "position": position_data,
+            "materials": materials,
+            "prompt": build_position_explanation_prompt(materials),
         }
 
     def _game_to_dict(self, game: StoredGame | None) -> dict:
