@@ -556,7 +556,8 @@ input {
 }
 
 .move-frequency-panel,
-.opening-panel {
+.opening-panel,
+.explanation-panel {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
@@ -624,6 +625,28 @@ input {
 
 .opening-bar span {
   background: #2b6cb0;
+}
+
+.explanation-missing {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.explanation-prompt {
+  overflow: auto;
+  max-height: 220px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfcfd;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .eval-grid {

@@ -10,6 +10,10 @@ const state = {
   openings: [],
   openingTotal: 0,
   openingRequestId: 0,
+  explanationPrompt: "",
+  explanationMissing: [],
+  explanationStatus: "未作成",
+  explanationRequestId: 0,
   game: null,
   query: "",
   currentMove: 0,
@@ -85,6 +89,10 @@ const moveFrequencySummary = document.querySelector("#moveFrequencySummary");
 const openingList = document.querySelector("#openingList");
 const openingSummary = document.querySelector("#openingSummary");
 const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
+const explanationSummary = document.querySelector("#explanationSummary");
+const explanationMissing = document.querySelector("#explanationMissing");
+const explanationPrompt = document.querySelector("#explanationPrompt");
+const buildExplanationPromptButton = document.querySelector("#buildExplanationPromptButton");
 const svgNamespace = "http://www.w3.org/2000/svg";
 const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
@@ -350,6 +358,23 @@ function renderOpenings() {
   }
 }
 
+function renderExplanationPrompt() {
+  explanationSummary.textContent = state.explanationStatus;
+  explanationMissing.textContent = state.explanationMissing.length
+    ? `不足: ${state.explanationMissing.join("、")}`
+    : "不足: なし";
+  explanationPrompt.textContent = state.explanationPrompt || "現在局面のプロンプトを作成できます";
+  buildExplanationPromptButton.disabled = !state.positions[state.currentMove];
+}
+
+function resetExplanationPrompt() {
+  state.explanationPrompt = "";
+  state.explanationMissing = [];
+  state.explanationStatus = "未作成";
+  state.explanationRequestId += 1;
+  renderExplanationPrompt();
+}
+
 function renderStatsList({ stats, listElement, summaryElement, labelKey, emptyText }) {
   listElement.textContent = "";
   summaryElement.textContent = `${stats.length}件`;
@@ -487,6 +512,7 @@ function renderBoard() {
   positionEval.textContent = formatEvalWithDelta(state.currentMove);
   positionSfen.textContent = position.sfen;
   renderEvalGraph();
+  renderExplanationPrompt();
   updateMoveControls();
 }
 
@@ -706,6 +732,7 @@ function svgElement(name, attributes = {}) {
 function setCurrentMove(moveNumber) {
   const max = Math.max(state.positions.length - 1, 0);
   state.currentMove = Math.max(0, Math.min(moveNumber, max));
+  resetExplanationPrompt();
   renderBoard();
   loadMoveFrequencies();
   loadOpenings();
@@ -781,6 +808,7 @@ async function loadViewer(gameId) {
     state.moveFrequencyTotal = 0;
     state.openings = [];
     state.openingTotal = 0;
+    resetExplanationPrompt();
     setStatus("");
     renderBoard();
     loadMoveFrequencies();
@@ -792,6 +820,7 @@ async function loadViewer(gameId) {
     state.moveFrequencyTotal = 0;
     state.openings = [];
     state.openingTotal = 0;
+    resetExplanationPrompt();
     setStatus(`局面データを取得できませんでした: ${error.message}`, "error");
     renderBoard();
     renderMoveFrequencies();
@@ -888,6 +917,39 @@ async function rebuildOpenings() {
     setStatus(`定跡DBを更新できませんでした: ${error.message}`, "error");
   } finally {
     rebuildOpeningsButton.disabled = false;
+  }
+}
+
+async function loadExplanationPrompt() {
+  const position = state.positions[state.currentMove];
+  if (!position?.id) return;
+
+  const requestId = state.explanationRequestId + 1;
+  state.explanationRequestId = requestId;
+  buildExplanationPromptButton.disabled = true;
+  state.explanationStatus = "作成中";
+  renderExplanationPrompt();
+
+  try {
+    const response = await fetch(`/api/positions/${position.id}/explanation-prompt`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    if (requestId !== state.explanationRequestId) return;
+    state.explanationPrompt = typeof payload.prompt === "string" ? payload.prompt : "";
+    state.explanationMissing = Array.isArray(payload.materials?.missing) ? payload.materials.missing : [];
+    state.explanationStatus = "作成済み";
+  } catch (error) {
+    if (requestId !== state.explanationRequestId) return;
+    state.explanationPrompt = "";
+    state.explanationMissing = [];
+    state.explanationStatus = "失敗";
+    setStatus(`局面解説プロンプトを作成できませんでした: ${error.message}`, "error");
+  } finally {
+    if (requestId === state.explanationRequestId) {
+      renderExplanationPrompt();
+    }
   }
 }
 
@@ -1042,6 +1104,7 @@ directoryImportForm.addEventListener("submit", (event) => {
 
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
 rebuildOpeningsButton.addEventListener("click", rebuildOpenings);
+buildExplanationPromptButton.addEventListener("click", loadExplanationPrompt);
 
 refreshButton.addEventListener("click", () => {
   loadGames();
