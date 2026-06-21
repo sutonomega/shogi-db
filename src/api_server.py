@@ -101,6 +101,16 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.get_blunders(), 200)
                 return
 
+            if path == "/api/blunders/explanation-prompt":
+                query = parse_qs(parsed_url.query)
+                game_id = int(query.get("game_id", ["0"])[0])
+                move_number = int(query.get("move_number", ["0"])[0])
+                self._send_json(
+                    self.api.get_blunder_explanation_prompt(game_id, move_number),
+                    200,
+                )
+                return
+
             if path == "/api/positions":
                 query = parse_qs(parsed_url.query)
                 sfen = query.get("sfen", [""])[0]

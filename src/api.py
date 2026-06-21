@@ -6,6 +6,10 @@ import json
 import os
 from pathlib import Path
 
+from .blunder_explanation import (
+    build_blunder_explanation_materials,
+    build_blunder_explanation_prompt,
+)
 from .enclosure_detector import EnclosureDetector
 from .game_repository import (
     BlunderRecord,
@@ -180,6 +184,43 @@ class ShogiDbApi:
                 self._blunder_to_dict(record)
                 for record in self.repository.list_blunders()
             ]
+        }
+
+    def get_blunder_explanation_prompt(self, game_id: int, move_number: int) -> dict:
+        game = self.repository.get_game(game_id)
+        if game is None:
+            raise ApiError(f"Game not found: {game_id}", 404)
+        if move_number <= 0:
+            raise ApiError("Move number must be positive", 400)
+
+        positions = self.repository.list_positions(game_id)
+        previous_position = next(
+            (position for position in positions if position.move_number == move_number - 1),
+            None,
+        )
+        current_position = next(
+            (position for position in positions if position.move_number == move_number),
+            None,
+        )
+        if previous_position is None or current_position is None:
+            raise ApiError(
+                f"Blunder position not found: game_id={game_id}, move_number={move_number}",
+                404,
+            )
+        if current_position.move is None:
+            raise ApiError("Move is required for blunder explanation", 400)
+
+        materials = build_blunder_explanation_materials(
+            self._game_summary_to_dict(game),
+            self._position_to_dict(previous_position),
+            self._position_to_dict(current_position),
+        )
+        return {
+            "game": self._game_summary_to_dict(game),
+            "position": self._position_to_dict(current_position),
+            "previous_position": self._position_to_dict(previous_position),
+            "materials": materials,
+            "prompt": build_blunder_explanation_prompt(materials),
         }
 
     def get_position_frequency(self, sfen: str) -> dict:

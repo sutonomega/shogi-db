@@ -241,6 +241,31 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["blunders"][0]["eval_delta"], -200)
         self.assertEqual(response["blunders"][0]["loss"], 200)
 
+    def test_get_blunder_explanation_prompt(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        response = self.api.get_blunder_explanation_prompt(game_id, 3)
+
+        self.assertEqual(response["game"]["id"], game_id)
+        self.assertEqual(response["position"]["move_number"], 3)
+        self.assertEqual(response["previous_position"]["move_number"], 2)
+        self.assertEqual(response["materials"]["move"], "2g2f")
+        self.assertEqual(response["materials"]["eval_before"], 80)
+        self.assertEqual(response["materials"]["eval_after"], -120)
+        self.assertEqual(response["materials"]["eval_delta"], -200)
+        self.assertEqual(response["materials"]["loss"], 200)
+        self.assertIn("着手前SFEN:", response["prompt"])
+        self.assertIn("着手後SFEN:", response["prompt"])
+        self.assertIn("推測として考えられる悪手理由", response["prompt"])
+
+    def test_get_blunder_explanation_prompt_requires_existing_move(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        with self.assertRaises(ApiError) as context:
+            self.api.get_blunder_explanation_prompt(game_id, 99)
+
+        self.assertEqual(context.exception.status_code, 404)
+
     def test_get_position_frequency(self):
         first_game = self.api.import_game(KIF_WITH_ANALYSIS)
         self.api.import_game(f"{KIF_WITH_ANALYSIS}\n# duplicate variation")

@@ -89,6 +89,33 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(explain_response["position"]["id"], 1)
         self.assertTrue(explain_response["explanation"].startswith("解説:"))
 
+    def test_blunder_explanation_prompt_endpoint(self):
+        kif_text = """\
+開始日時：2024/03/03 10:00:00
+手合割：平手
+先手：悪手太郎
+後手：悪手花子
+手数----指手---------消費時間--
+   1 ７六歩(77)
+**解析 0
+*評価値 +100  読み筋 7g7f 3c3d
+   2 ３四歩(33)
+**解析 0
+*評価値 +80  読み筋 3c3d 2g2f
+   3 ２六歩(27)
+**解析 0
+*評価値 -120  読み筋 2g2f 8c8d
+   4 投了
+まで3手で先手の勝ち
+"""
+        self._post_json("/api/games/import", {"kif": kif_text})
+
+        response = self._get_json("/api/blunders/explanation-prompt?game_id=1&move_number=3")
+
+        self.assertEqual(response["materials"]["move"], "2g2f")
+        self.assertEqual(response["materials"]["eval_delta"], -200)
+        self.assertIn("着手前SFEN:", response["prompt"])
+
     def test_import_endpoint_accepts_cp932_kif_body(self):
         import_response = self._post_bytes(
             "/api/games/import",
