@@ -24,6 +24,7 @@ const state = {
   game: null,
   query: "",
   currentMove: 0,
+  selectedCandidateMove: null,
 };
 
 const pieceLabels = {
@@ -112,6 +113,8 @@ const positionMoveNumber = document.querySelector("#positionMoveNumber");
 const positionMove = document.querySelector("#positionMove");
 const positionEval = document.querySelector("#positionEval");
 const positionSfen = document.querySelector("#positionSfen");
+const candidateList = document.querySelector("#candidateList");
+const candidateSummary = document.querySelector("#candidateSummary");
 const evalGraph = document.querySelector("#evalGraph");
 const evalSummary = document.querySelector("#evalSummary");
 const evalGraphStatus = document.querySelector("#evalGraphStatus");
@@ -567,13 +570,14 @@ function renderBoard() {
     positionMove.textContent = "開始局面";
     positionEval.textContent = "なし";
     positionSfen.textContent = "";
+    renderEngineCandidates(null);
     updateMoveControls();
     renderEvalGraph();
     return;
   }
 
   const parsed = parseSfen(position.sfen);
-  const moveInfo = currentMoveInfo();
+  const moveInfo = selectedCandidateMoveInfo(position) || currentMoveInfo();
   boardGrid.textContent = "";
 
   for (let rowIndex = 0; rowIndex < parsed.squares.length; rowIndex += 1) {
@@ -605,9 +609,64 @@ function renderBoard() {
   positionMove.textContent = moveInfo?.label || "開始局面";
   positionEval.textContent = formatEvalWithDelta(state.currentMove);
   positionSfen.textContent = position.sfen;
+  renderEngineCandidates(position);
   renderEvalGraph();
   renderExplanationPrompt();
   updateMoveControls();
+}
+
+function renderEngineCandidates(position) {
+  candidateList.textContent = "";
+  state.selectedCandidateMove = position?.candidates?.some((candidate) => candidate.move === state.selectedCandidateMove)
+    ? state.selectedCandidateMove
+    : null;
+  const candidates = Array.isArray(position?.candidates) ? position.candidates.slice(0, 5) : [];
+  candidateSummary.textContent = `${candidates.length}件`;
+
+  if (!candidates.length) {
+    const empty = document.createElement("p");
+    empty.className = "candidate-empty";
+    empty.textContent = "候補手データはありません";
+    candidateList.appendChild(empty);
+    return;
+  }
+
+  const actualMove = position?.move || null;
+  candidates.forEach((candidate, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = [
+      "candidate-item",
+      candidate.move === state.selectedCandidateMove ? "selected" : "",
+      candidate.move === actualMove ? "actual" : "",
+    ].filter(Boolean).join(" ");
+    button.addEventListener("click", () => {
+      state.selectedCandidateMove = state.selectedCandidateMove === candidate.move ? null : candidate.move;
+      renderBoard();
+    });
+
+    const rank = document.createElement("span");
+    rank.className = "candidate-rank";
+    rank.textContent = `${index + 1}.`;
+    button.appendChild(rank);
+
+    const move = document.createElement("strong");
+    move.textContent = moveLabelForCandidate(candidate.move, position.sfen);
+    button.appendChild(move);
+
+    const evalValue = document.createElement("span");
+    evalValue.className = "candidate-eval";
+    evalValue.textContent = formatEval(candidate.eval);
+    button.appendChild(evalValue);
+
+    if (candidate.move === actualMove) {
+      const actual = document.createElement("small");
+      actual.textContent = "実戦手";
+      button.appendChild(actual);
+    }
+
+    candidateList.appendChild(button);
+  });
 }
 
 function updateMoveControls() {
@@ -632,6 +691,17 @@ function currentMoveInfo() {
   const position = state.positions[state.currentMove];
   if (!position?.move) return null;
   return moveInfoForPosition(state.currentMove);
+}
+
+function selectedCandidateMoveInfo(position) {
+  if (!state.selectedCandidateMove || !position?.sfen) return null;
+  const move = parseUsiMove(state.selectedCandidateMove);
+  if (!move) return null;
+  return {
+    label: moveLabelForCandidate(state.selectedCandidateMove, position.sfen),
+    from: move.from,
+    to: move.to,
+  };
 }
 
 function moveInfoForPosition(index) {
@@ -905,6 +975,7 @@ function svgElement(name, attributes = {}) {
 function setCurrentMove(moveNumber) {
   const max = Math.max(state.positions.length - 1, 0);
   state.currentMove = Math.max(0, Math.min(moveNumber, max));
+  state.selectedCandidateMove = null;
   resetOpeningComparison();
   resetExplanationPrompt();
   renderBoard();
