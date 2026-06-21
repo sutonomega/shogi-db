@@ -389,6 +389,9 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertIn("SFEN:", response["prompt"])
         self.assertIn("実戦手: 7g7f", response["prompt"])
         self.assertIn("候補手: 2g2f(+55)", response["prompt"])
+        self.assertIn("確定情報と推測を混ぜない", response["prompt"])
+        self.assertIn("根拠に使った入力項目を明示する", response["prompt"])
+        self.assertIn("与えられていない読みや評価を創作しない", response["prompt"])
 
     def test_get_position_explanation_prompt_marks_missing_materials(self):
         game_id = self.api.import_game(SHIKENBISHA_KIF)["game"]["id"]
