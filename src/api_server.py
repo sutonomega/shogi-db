@@ -14,10 +14,11 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-
+from .settings import AppSettings, load_settings, save_settings, settings_path
 from .api import ApiError, ShogiDbApi
 from .kif_encoding import KifEncodingError
 from .game_repository import GameRepository
+from tempfile import TemporaryDirectory
 
 def app_root() -> Path:
     if getattr(sys, "frozen", False):
@@ -455,6 +456,7 @@ def create_server(
     Handler.opening_import_jobs = OpeningDirectoryImportJobStore(api)
     Handler.opening_rebuild_jobs = OpeningRebuildJobStore(api)
     Handler.static_root = root
+    Handler.repository = repository
     return ThreadingHTTPServer((host, port), Handler)
 
 
@@ -881,62 +883,35 @@ DEFAULT_SETTINGS = {
     "piece_theme": "hitomoji",
 }
 
-
-def settings_path() -> Path:
-    override = os.environ.get("SHOGI_DB_SETTINGS_PATH")
-    if override:
-        return Path(override)
-
-    appdata = os.environ.get("APPDATA")
-    if appdata:
-        return Path(appdata) / "shogi-db" / "config.json"
-
-    config_home = os.environ.get("XDG_CONFIG_HOME")
-    if config_home:
-        return Path(config_home) / "shogi-db" / "config.json"
-
-    return Path.home() / ".config" / "shogi-db" / "config.json"
-
-
 def load_settings_payload() -> dict:
-    payload = dict(DEFAULT_SETTINGS)
-    path = settings_path()
-
-    if path.exists():
-        try:
-            loaded = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ApiError("Invalid settings JSON", 500) from exc
-        if not isinstance(loaded, dict):
-            raise ApiError("Settings JSON must be an object", 500)
-        payload.update(_normalize_settings_payload(loaded, allow_partial=True))
-
-    if not payload["suisho_engine_path"]:
-        payload["suisho_engine_path"] = os.environ.get("SUISHO_ENGINE_PATH", "")
-    if not payload["llm_command"]:
-        payload["llm_command"] = os.environ.get("SHOGI_DB_LLM_COMMAND", "")
-
-    payload["settings_path"] = str(path)
-    return payload
+    settings = load_settings()
+    return {
+        "suisho_engine_path": settings.suisho_engine_path,
+        "llm_command": settings.llm_command,
+        "board_theme": settings.board_theme,
+        "piece_theme": settings.piece_theme,
+        "settings_path": str(settings_path()),
+    }
 
 
 def save_settings_payload(payload: dict) -> dict:
-    settings = dict(DEFAULT_SETTINGS)
-    current = load_settings_payload()
-    for key in DEFAULT_SETTINGS:
-        settings[key] = current.get(key, DEFAULT_SETTINGS[key])
-    settings.update(_normalize_settings_payload(payload, allow_partial=True))
-
-    path = settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    payload = _normalize_settings_payload(payload,allow_partial=True,)
+    current = load_settings()
+    settings = AppSettings(
+        suisho_engine_path=payload.get( "suisho_engine_path",current.suisho_engine_path,),
+        llm_command=payload.get("llm_command",current.llm_command,),
+        board_theme=payload.get("board_theme",current.board_theme,),
+        piece_theme=payload.get("piece_theme",current.piece_theme,),
     )
+    saved = save_settings(settings)
 
-    settings["settings_path"] = str(path)
-    return settings
-
+    return {
+        "suisho_engine_path": saved.suisho_engine_path,
+        "llm_command": saved.llm_command,
+        "board_theme": saved.board_theme,
+        "piece_theme": saved.piece_theme,
+        "settings_path": str(settings_path()),
+    }
 
 def _normalize_settings_payload(payload: dict, allow_partial: bool = False) -> dict:
     if not isinstance(payload, dict):
@@ -1074,6 +1049,7 @@ def _parse_sources(value: str) -> list[str]:
 
 def main():
     server = create_server()
+
 
     try:
         server.serve_forever()

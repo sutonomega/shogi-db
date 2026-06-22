@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 
 # Virtual Environment
-.venv/
+.venv*/
 
 # PyInstaller
 build/
@@ -11,3 +11,5 @@ dist/
 
 # Local config
 .config/
+
+*.db

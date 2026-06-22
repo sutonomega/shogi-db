@@ -25,15 +25,23 @@ class AppSettings:
 
 
 def settings_path() -> Path:
-    override = os.environ.get("SHOGI_DB_SETTINGS_PATH")
-    if override:
-        return Path(override)
+    explicit_path = os.environ.get(
+        "SHOGI_DB_SETTINGS_PATH"
+    )
+    if explicit_path:
+        return Path(explicit_path).expanduser()
 
-    config_home = os.environ.get("XDG_CONFIG_HOME")
-    if config_home:
-        return Path(config_home) / "shogi-db" / "config.json"
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / "shogi-db" / "config.json"
 
-    return Path.home() / ".config" / "shogi-db" / "config.json"
+    return (
+        Path.home()
+        / ".config"
+        / "shogi-db"
+        / "config.json"
+    )
 
 
 def load_settings() -> AppSettings:

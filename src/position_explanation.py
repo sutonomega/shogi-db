@@ -6,11 +6,19 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import re
 
 
 class PositionExplanationError(RuntimeError):
     pass
 
+ANSI_ESCAPE_PATTERN = re.compile(
+    r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+)
+
+
+def strip_ansi_escape(text: str) -> str:
+    return ANSI_ESCAPE_PATTERN.sub("", text)
 
 def build_position_explanation_prompt(materials: dict) -> str:
     missing = materials.get("missing", [])
@@ -131,11 +139,11 @@ def generate_position_explanation(
         raise PositionExplanationError("LLM command timed out") from exc
 
     if process.returncode != 0:
-        stderr = process.stderr.strip()
+        stderr = strip_ansi_escape(process.stderr).strip()
         message = stderr or f"LLM command failed with exit code {process.returncode}"
         raise PositionExplanationError(message)
 
-    explanation = process.stdout.strip()
+    explanation = strip_ansi_escape(process.stdout).strip()
     if not explanation:
         raise PositionExplanationError("LLM command returned empty output")
     return explanation

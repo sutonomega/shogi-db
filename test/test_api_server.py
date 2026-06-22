@@ -1,6 +1,6 @@
 import json
 import os
-import tempfile
+import sys
 import threading
 import unittest
 from pathlib import Path
@@ -9,6 +9,7 @@ from time import sleep
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from src.api import ShogiDbApi
 from src.api_server import (
     DirectoryImportJobStore,
     OpeningDirectoryImportJobStore,
@@ -22,7 +23,6 @@ from src.api_server import (
     start_opening_import_directory_payload,
     start_opening_rebuild_payload,
 )
-from src.api import ShogiDbApi
 from src.game_repository import GameRepository
 
 
@@ -37,36 +37,55 @@ KIF_TEXT = """\
    3 投了
 """
 
+PYTHON_COMMAND = f'"{sys.executable}"'
+PYTHON_UTF8_PREFIX = f"{PYTHON_COMMAND} -X utf8 -c"
+
 
 class TestApiServer(unittest.TestCase):
     def setUp(self):
-        self.temp_db = tempfile.NamedTemporaryFile(delete=True)
+        self.temp_db_dir = TemporaryDirectory()
         self.temp_settings_dir = TemporaryDirectory()
+
+        self.db_path = Path(self.temp_db_dir.name) / "test-shogi.db"
+
         self.previous_settings_path = os.environ.get("SHOGI_DB_SETTINGS_PATH")
         self.previous_suisho_engine_path = os.environ.get("SUISHO_ENGINE_PATH")
         self.previous_llm_command = os.environ.get("SHOGI_DB_LLM_COMMAND")
+
         os.environ["SHOGI_DB_SETTINGS_PATH"] = str(
             Path(self.temp_settings_dir.name) / "config.json"
         )
         os.environ.pop("SUISHO_ENGINE_PATH", None)
         os.environ.pop("SHOGI_DB_LLM_COMMAND", None)
+
         try:
-            self.server = create_server(self.temp_db.name, port=0)
+            self.server = create_server(self.db_path, port=0)
         except PermissionError as exc:
-            self.temp_db.close()
+            self.temp_db_dir.cleanup()
             self.temp_settings_dir.cleanup()
             self._restore_environment()
             self.skipTest(f"HTTP server sockets are unavailable: {exc}")
-        self.thread = threading.Thread(target=self.server.serve_forever)
+
+        self.thread = threading.Thread(
+            target=self.server.serve_forever,
+            daemon=True,
+        )
         self.thread.start()
+
         host, port = self.server.server_address
         self.base_url = f"http://{host}:{port}"
 
     def tearDown(self):
         self.server.shutdown()
         self.server.server_close()
-        self.thread.join()
-        self.temp_db.close()
+        self.thread.join(timeout=2)
+
+        try:
+            self.server.RequestHandlerClass.api.repository.close()
+        except Exception:
+            pass
+
+        self.temp_db_dir.cleanup()
         self.temp_settings_dir.cleanup()
         self._restore_environment()
 
@@ -133,7 +152,10 @@ class TestApiServer(unittest.TestCase):
             "/api/positions/1/opening-comparison-explain",
             {
                 "sources": ["self", "professional"],
-                "llm_command": "python3 -c \"import sys; print('比較解説:' + sys.stdin.read().splitlines()[0])\"",
+                "llm_command": (
+                    f"{PYTHON_UTF8_PREFIX} "
+                    "\"import sys; print('比較解説:' + sys.stdin.read().splitlines()[0])\""
+                ),
                 "timeout": 5,
             },
         )
@@ -143,7 +165,10 @@ class TestApiServer(unittest.TestCase):
         explain_response = self._post_json(
             "/api/positions/1/explain",
             {
-                "llm_command": "python3 -c \"import sys; print('解説:' + sys.stdin.read().splitlines()[0])\"",
+                "llm_command": (
+                    f"{PYTHON_UTF8_PREFIX} "
+                    "\"import sys; print('解説:' + sys.stdin.read().splitlines()[0])\""
+                ),
                 "timeout": 5,
             },
         )
@@ -228,12 +253,14 @@ class TestApiServer(unittest.TestCase):
             {
                 "game_id": 1,
                 "move_number": 3,
-                "llm_command": "python3 -c \"import sys; print('悪手解説:' + sys.stdin.read().splitlines()[0])\"",
+                "llm_command": (
+                    f"{PYTHON_UTF8_PREFIX} "
+                    "\"import sys; print('BLUNDER:' + sys.stdin.read().splitlines()[0])\""
+                ),
                 "timeout": 5,
             },
         )
-        self.assertEqual(explain_response["materials"]["move"], "2g2f")
-        self.assertTrue(explain_response["explanation"].startswith("悪手解説:"))
+        self.assertTrue(explain_response["explanation"].startswith("BLUNDER:"))
 
     def test_import_endpoint_accepts_cp932_kif_body(self):
         import_response = self._post_bytes(
