@@ -307,7 +307,10 @@ input {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
+  overflow-y: auto;
+  max-height: 242px;
   margin-top: 10px;
+  padding-right: 2px;
 }
 
 .stats-item {
@@ -698,6 +701,13 @@ input {
 .candidate-list {
   display: grid;
   gap: 8px;
+}
+
+.move-frequency-list,
+.opening-list {
+  overflow-y: auto;
+  max-height: 206px;
+  padding-right: 2px;
 }
 
 .candidate-item {
