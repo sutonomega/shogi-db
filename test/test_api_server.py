@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -40,10 +41,21 @@ KIF_TEXT = """\
 class TestApiServer(unittest.TestCase):
     def setUp(self):
         self.temp_db = tempfile.NamedTemporaryFile(delete=True)
+        self.temp_settings_dir = TemporaryDirectory()
+        self.previous_settings_path = os.environ.get("SHOGI_DB_SETTINGS_PATH")
+        self.previous_suisho_engine_path = os.environ.get("SUISHO_ENGINE_PATH")
+        self.previous_llm_command = os.environ.get("SHOGI_DB_LLM_COMMAND")
+        os.environ["SHOGI_DB_SETTINGS_PATH"] = str(
+            Path(self.temp_settings_dir.name) / "config.json"
+        )
+        os.environ.pop("SUISHO_ENGINE_PATH", None)
+        os.environ.pop("SHOGI_DB_LLM_COMMAND", None)
         try:
             self.server = create_server(self.temp_db.name, port=0)
         except PermissionError as exc:
             self.temp_db.close()
+            self.temp_settings_dir.cleanup()
+            self._restore_environment()
             self.skipTest(f"HTTP server sockets are unavailable: {exc}")
         self.thread = threading.Thread(target=self.server.serve_forever)
         self.thread.start()
@@ -55,6 +67,24 @@ class TestApiServer(unittest.TestCase):
         self.server.server_close()
         self.thread.join()
         self.temp_db.close()
+        self.temp_settings_dir.cleanup()
+        self._restore_environment()
+
+    def _restore_environment(self):
+        if self.previous_settings_path is None:
+            os.environ.pop("SHOGI_DB_SETTINGS_PATH", None)
+        else:
+            os.environ["SHOGI_DB_SETTINGS_PATH"] = self.previous_settings_path
+
+        if self.previous_suisho_engine_path is None:
+            os.environ.pop("SUISHO_ENGINE_PATH", None)
+        else:
+            os.environ["SUISHO_ENGINE_PATH"] = self.previous_suisho_engine_path
+
+        if self.previous_llm_command is None:
+            os.environ.pop("SHOGI_DB_LLM_COMMAND", None)
+        else:
+            os.environ["SHOGI_DB_LLM_COMMAND"] = self.previous_llm_command
 
     def test_import_list_and_positions_endpoints(self):
         import_response = self._post_json("/api/games/import", {"kif": KIF_TEXT})
@@ -214,6 +244,57 @@ class TestApiServer(unittest.TestCase):
 
         self.assertEqual(import_response["game"]["black"], "解析太郎")
         self.assertEqual(import_response["positions_count"], 3)
+
+    def test_settings_endpoint_loads_saves_and_persists_settings(self):
+        response = self._get_json("/api/settings")
+
+        self.assertEqual(response["suisho_engine_path"], "")
+        self.assertEqual(response["llm_command"], "")
+        self.assertEqual(response["board_theme"], "light")
+        self.assertEqual(response["piece_theme"], "hitomoji")
+        self.assertEqual(
+            response["settings_path"],
+            os.environ["SHOGI_DB_SETTINGS_PATH"],
+        )
+
+        updated = self._post_json(
+            "/api/settings",
+            {
+                "suisho_engine_path": "/mnt/share/Suisho5-AVX2.exe",
+                "llm_command": "ollama run llama3.1",
+                "board_theme": "dark",
+                "piece_theme": "futamoji",
+            },
+        )
+
+        self.assertEqual(updated["suisho_engine_path"], "/mnt/share/Suisho5-AVX2.exe")
+        self.assertEqual(updated["llm_command"], "ollama run llama3.1")
+        self.assertEqual(updated["board_theme"], "dark")
+        self.assertEqual(updated["piece_theme"], "futamoji")
+
+        settings_file = Path(os.environ["SHOGI_DB_SETTINGS_PATH"])
+        self.assertTrue(settings_file.exists())
+        saved = json.loads(settings_file.read_text(encoding="utf-8"))
+        self.assertEqual(saved["board_theme"], "dark")
+        self.assertEqual(saved["piece_theme"], "futamoji")
+
+        reloaded = self._get_json("/api/settings")
+
+        self.assertEqual(reloaded["suisho_engine_path"], "/mnt/share/Suisho5-AVX2.exe")
+        self.assertEqual(reloaded["llm_command"], "ollama run llama3.1")
+        self.assertEqual(reloaded["board_theme"], "dark")
+        self.assertEqual(reloaded["piece_theme"], "futamoji")
+
+    def test_settings_endpoint_rejects_invalid_theme(self):
+        with self.assertRaises(HTTPError) as context:
+            self._post_json(
+                "/api/settings",
+                {
+                    "board_theme": "unknown",
+                },
+            )
+
+        self.assertEqual(context.exception.code, 400)
 
     def test_missing_endpoint_returns_404(self):
         with self.assertRaises(HTTPError) as context:
@@ -424,6 +505,7 @@ class TestImportGamePayload(unittest.TestCase):
         self.assertTrue(is_import_post_path("/api/openings/import"))
         self.assertTrue(is_import_post_path("/api/openings/import-directory"))
         self.assertTrue(is_import_post_path("/api/openings/rebuild"))
+        self.assertTrue(is_import_post_path("/api/settings"))
         self.assertTrue(is_import_post_path("/api/positions/123/analyze"))
         self.assertTrue(is_import_post_path("/api/positions/123/explain"))
         self.assertTrue(

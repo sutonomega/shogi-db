@@ -31,7 +31,26 @@ const state = {
     boardTheme: "light",
     pieceTheme: "hitomoji",
   },
+  settings: {
+    suishoEnginePath: "",
+    llmCommand: "",
+  },
 };
+
+const suishoEnginePathInput =
+  document.querySelector("#suishoEnginePathInput");
+
+const llmCommandInput =
+  document.querySelector("#llmCommandInput");
+
+const saveSettingsButton =
+  document.querySelector("#saveSettingsButton");
+
+const settingsForm =
+  document.querySelector("#settingsForm");
+
+const settingsStatusText =
+  document.querySelector("#settingsStatusText");
 
 const pieceLabels = {
   P: "歩",
@@ -85,8 +104,6 @@ const pieceAssetNames = {
   "+B": "horse",
   "+R": "dragon",
 };
-
-const displaySettingsStorageKey = "shogi-db-display-settings";
 
 const japaneseFiles = {
   1: "１",
@@ -201,6 +218,109 @@ const mateEvalValue = 100000;
 const evalGraphMinScale = 3000;
 const evalGraphMaxScale = 3000;
 const evalGraphScaleStep = 500;
+
+async function loadSettings() {
+  try {
+    const response =
+      await fetch("/api/settings");
+
+    if (!response.ok) {
+      throw new Error(
+        `HTTP ${response.status}`
+      );
+    }
+
+    const settings =
+      await response.json();
+
+    state.settings = {
+      suishoEnginePath:
+        settings.suisho_engine_path || "",
+      llmCommand:
+        settings.llm_command || "",
+    };
+
+    state.displaySettings = {
+      boardTheme:
+        settings.board_theme || "light",
+      pieceTheme:
+        settings.piece_theme || "hitomoji",
+    };
+
+    syncSettingsControls();
+    applyBoardTheme();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function saveSettings() {
+  const payload = {
+    suisho_engine_path:
+      suishoEnginePathInput.value.trim(),
+
+    llm_command:
+      llmCommandInput.value.trim(),
+
+    board_theme:
+      state.displaySettings.boardTheme,
+
+    piece_theme:
+      state.displaySettings.pieceTheme,
+  };
+
+  const response =
+    await fetch("/api/settings", {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+  if (!response.ok) {
+    throw new Error(
+      `HTTP ${response.status}`
+    );
+  }
+
+  setStatus("設定を保存しました");
+}
+
+function syncSettingsControls() {
+  boardThemeSelect.value =
+    state.displaySettings.boardTheme;
+
+  pieceThemeSelect.value =
+    state.displaySettings.pieceTheme;
+
+  suishoEnginePathInput.value =
+    state.settings.suishoEnginePath;
+
+  llmCommandInput.value =
+    state.settings.llmCommand;
+}
+
+settingsForm.addEventListener(
+  "submit",
+  async (event) => {
+    event.preventDefault();
+
+    try {
+      await saveSettings();
+
+      setStatus(
+        "設定を保存しました"
+      );
+    } catch (error) {
+      setStatus(
+        `設定保存失敗: ${error.message}`,
+        "error"
+      );
+    }
+  }
+);
 
 function formatDate(value) {
   if (!value) return "未設定";
@@ -639,32 +759,6 @@ function parseHands(handsPart) {
   return hands;
 }
 
-function loadDisplaySettings() {
-  try {
-    const raw = window.localStorage.getItem(displaySettingsStorageKey);
-    const parsed = raw ? JSON.parse(raw) : {};
-    const boardTheme = boardThemes[parsed.boardTheme] ? parsed.boardTheme : state.displaySettings.boardTheme;
-    const pieceTheme = pieceThemes.has(parsed.pieceTheme) ? parsed.pieceTheme : state.displaySettings.pieceTheme;
-    state.displaySettings = { boardTheme, pieceTheme };
-  } catch {
-    state.displaySettings = {
-      boardTheme: "light",
-      pieceTheme: "hitomoji",
-    };
-  }
-  syncDisplaySettingsControls();
-  applyBoardTheme();
-}
-
-function saveDisplaySettings() {
-  window.localStorage.setItem(displaySettingsStorageKey, JSON.stringify(state.displaySettings));
-}
-
-function syncDisplaySettingsControls() {
-  boardThemeSelect.value = state.displaySettings.boardTheme;
-  pieceThemeSelect.value = state.displaySettings.pieceTheme;
-}
-
 function applyBoardTheme() {
   const imagePath = boardThemes[state.displaySettings.boardTheme] || boardThemes.light;
   boardGrid.style.backgroundImage = `url("${imagePath}")`;
@@ -677,7 +771,6 @@ function updateDisplaySetting(key, value) {
     ...state.displaySettings,
     [key]: value,
   };
-  saveDisplaySettings();
   applyBoardTheme();
   renderBoard();
 }
@@ -1978,11 +2071,23 @@ nextMoveButton.addEventListener("click", () => setCurrentMove(state.currentMove 
 lastMoveButton.addEventListener("click", () => setCurrentMove(state.positions.length - 1));
 moveSlider.addEventListener("input", (event) => setCurrentMove(Number(event.target.value)));
 
-loadDisplaySettings();
+async function init() {
+  try {
+    await loadSettings();
+  } catch (error) {
+    setStatus(
+      `設定を読み込めませんでした: ${error.message}`,
+      "error"
+    );
+  }
 
-const gameId = gameIdFromPath();
-if (gameId) {
-  loadViewer(gameId);
-} else {
-  loadGames();
+  const gameId = gameIdFromPath();
+
+  if (gameId) {
+    loadViewer(gameId);
+  } else {
+    loadGames();
+  }
 }
+
+init();
