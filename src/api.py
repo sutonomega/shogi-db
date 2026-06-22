@@ -349,6 +349,35 @@ class ShogiDbApi:
         return {
             "source": source,
             "count": len(openings),
+            "processed": len(openings),
+            "total": len(openings),
+            "canceled": False,
+            "openings": [
+                self._opening_to_dict(opening)
+                for opening in openings
+            ],
+        }
+
+    def rebuild_openings_with_progress(
+        self,
+        source: str = "self",
+        *,
+        progress_callback=None,
+        should_cancel=None,
+    ) -> dict:
+        if not source.strip():
+            raise ApiError("Opening source is empty", 400)
+        openings, processed, total, canceled = OpeningAggregator(self.repository).rebuild_with_progress(
+            source=source,
+            progress_callback=progress_callback,
+            should_cancel=should_cancel,
+        )
+        return {
+            "source": source,
+            "count": len(openings),
+            "processed": processed,
+            "total": total,
+            "canceled": canceled,
             "openings": [
                 self._opening_to_dict(opening)
                 for opening in openings

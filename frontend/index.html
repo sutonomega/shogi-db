@@ -32,7 +32,11 @@
       <section class="management-panel" id="gameRegistrationPanel" aria-label="棋譜登録">
         <div class="panel-heading">
           <h2>棋譜登録</h2>
-          <span>自分の棋譜</span>
+          <div class="panel-heading-actions">
+            <span id="openingRebuildSummary">自分の棋譜</span>
+            <button id="openingRebuildButton" type="button">定跡DB更新</button>
+            <button id="cancelOpeningRebuildButton" type="button" hidden>キャンセル</button>
+          </div>
         </div>
         <div class="registration-controls">
           <form class="import-form" id="importForm" aria-label="KIFファイル登録">

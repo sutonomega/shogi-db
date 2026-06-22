@@ -154,6 +154,8 @@ source='self' の count・avg_eval を更新（UPSERT）
 openings テーブルへ反映
 ```
 
+定跡 DB 更新は `POST /api/openings/rebuild` に `async=true` を指定すると非同期ジョブとして実行できる。ジョブは `positions` の着手ペア数を総数として `processed/total` を返し、キャンセル要求があった場合は集計結果を `openings` へ反映せず終了する。
+
 外部定跡 DB は、変換ツールを利用して SFEN と指し手の列へ変換できる場合に `source` を分けて `openings` へ登録する。
 
 ---

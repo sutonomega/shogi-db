@@ -22,6 +22,7 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     api: ShogiDbApi
     import_jobs: "DirectoryImportJobStore"
     opening_import_jobs: "OpeningDirectoryImportJobStore"
+    opening_rebuild_jobs: "OpeningRebuildJobStore"
     static_root: Path
 
     def do_POST(self) -> None:
@@ -60,8 +61,20 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self._explain_position_from_request(int(parts[2])), 200)
                 return
 
+            if (
+                len(parts) == 6
+                and parts[0] == "api"
+                and parts[1] == "openings"
+                and parts[2] == "rebuild"
+                and parts[3] == "jobs"
+                and parts[5] == "cancel"
+            ):
+                self._send_json(self.opening_rebuild_jobs.cancel(parts[4]), 200)
+                return
+
             if path == "/api/openings/rebuild":
-                self._send_json(self._rebuild_openings_from_request(), 200)
+                payload, status_code = self._rebuild_openings_from_request()
+                self._send_json(payload, status_code)
                 return
 
             if path == "/api/openings/import":
@@ -195,6 +208,17 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
                 len(parts) == 5
                 and parts[0] == "api"
                 and parts[1] == "openings"
+                and parts[2] == "rebuild"
+                and parts[3] == "jobs"
+            ):
+                self._send_json(self.opening_rebuild_jobs.get(parts[4]), 200)
+                return
+
+            parts = path.strip("/").split("/")
+            if (
+                len(parts) == 5
+                and parts[0] == "api"
+                and parts[1] == "openings"
                 and parts[2] == "import-directory"
                 and parts[3] == "jobs"
             ):
@@ -266,13 +290,18 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
             ), 202
         return import_opening_directory_payload(self.api, payload), 201
 
-    def _rebuild_openings_from_request(self) -> dict:
+    def _rebuild_openings_from_request(self) -> tuple[dict, int]:
         raw_body = self._read_body()
         payload = _decode_json_payload(raw_body)
         source = payload.get("source", "self")
+        async_rebuild = payload.get("async", False)
         if not isinstance(source, str):
             raise ApiError("Request body field source must be string", 400)
-        return self.api.rebuild_openings(source=source)
+        if not isinstance(async_rebuild, bool):
+            raise ApiError("Request body field async must be boolean", 400)
+        if async_rebuild:
+            return start_opening_rebuild_payload(self.opening_rebuild_jobs, payload), 202
+        return self.api.rebuild_openings(source=source), 200
 
     def _analyze_position_from_request(self, position_id: int) -> dict:
         raw_body = self._read_body()
@@ -401,6 +430,7 @@ def create_server(
     Handler.api = api
     Handler.import_jobs = DirectoryImportJobStore(api)
     Handler.opening_import_jobs = OpeningDirectoryImportJobStore(api)
+    Handler.opening_rebuild_jobs = OpeningRebuildJobStore(api)
     Handler.static_root = root
     return ThreadingHTTPServer((host, port), Handler)
 
@@ -460,10 +490,18 @@ def is_import_post_path(path: str) -> bool:
     return (
         len(parts) == 6
         and parts[0] == "api"
-        and parts[1] in ("games", "openings")
-        and parts[2] == "import-directory"
         and parts[3] == "jobs"
         and parts[5] == "cancel"
+        and (
+            (
+                parts[1] in ("games", "openings")
+                and parts[2] == "import-directory"
+            )
+            or (
+                parts[1] == "openings"
+                and parts[2] == "rebuild"
+            )
+        )
     )
 
 
@@ -695,6 +733,112 @@ class OpeningDirectoryImportJobStore:
             return bool(self._jobs[job_id]["cancel_requested"])
 
 
+class OpeningRebuildJobStore:
+    def __init__(self, api: ShogiDbApi) -> None:
+        self.api = api
+        self._jobs: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    def start(self, source: str) -> dict:
+        job_id = uuid.uuid4().hex
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "source": source,
+            "total": 0,
+            "processed": 0,
+            "count": 0,
+            "failed": 0,
+            "errors": [],
+            "cancel_requested": False,
+            "done": False,
+        }
+        with self._lock:
+            self._jobs[job_id] = job
+        thread = threading.Thread(
+            target=self._run,
+            args=(job_id, source),
+            daemon=True,
+        )
+        thread.start()
+        return self.get(job_id)
+
+    def get(self, job_id: str) -> dict:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise ApiError(f"Opening rebuild job not found: {job_id}", 404)
+            return dict(job)
+
+    def cancel(self, job_id: str) -> dict:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise ApiError(f"Opening rebuild job not found: {job_id}", 404)
+            if not job["done"]:
+                job["cancel_requested"] = True
+                job["status"] = "canceling"
+            return dict(job)
+
+    def _update(self, job_id: str, **changes) -> None:
+        with self._lock:
+            self._jobs[job_id].update(changes)
+
+    def _run(self, job_id: str, source: str) -> None:
+        self._update(job_id, status="scanning")
+
+        def update_progress(processed: int, total: int) -> None:
+            if self._is_cancel_requested(job_id):
+                status = "canceling"
+            else:
+                status = "running"
+            self._update(
+                job_id,
+                status=status,
+                processed=processed,
+                total=total,
+            )
+
+        try:
+            result = self.api.rebuild_openings_with_progress(
+                source=source,
+                progress_callback=update_progress,
+                should_cancel=lambda: self._is_cancel_requested(job_id),
+            )
+        except Exception as exc:
+            self._update(
+                job_id,
+                status="failed",
+                errors=[{"source": source, "error": str(exc)}],
+                failed=1,
+                done=True,
+            )
+            return
+
+        if result["canceled"] or self._is_cancel_requested(job_id):
+            self._update(
+                job_id,
+                status="canceled",
+                total=result["total"],
+                processed=result["processed"],
+                count=result["count"],
+                done=True,
+            )
+        else:
+            self._update(
+                job_id,
+                status="completed",
+                total=result["total"],
+                processed=result["total"],
+                count=result["count"],
+                done=True,
+            )
+
+    def _is_cancel_requested(self, job_id: str) -> bool:
+        with self._lock:
+            return bool(self._jobs[job_id]["cancel_requested"])
+
+
 def import_directory_payload(api: ShogiDbApi, payload: dict) -> dict:
     directory_path = payload.get("path")
     recursive = payload.get("recursive", False)
@@ -752,6 +896,16 @@ def start_opening_import_directory_payload(
     if not isinstance(source, str):
         raise ApiError("Request body field source must be string", 400)
     return import_jobs.start(directory_path, source, recursive)
+
+
+def start_opening_rebuild_payload(
+    rebuild_jobs: OpeningRebuildJobStore,
+    payload: dict,
+) -> dict:
+    source = payload.get("source", "self")
+    if not isinstance(source, str):
+        raise ApiError("Request body field source must be string", 400)
+    return rebuild_jobs.start(source)
 
 
 def _decode_json_payload(raw_body: bytes) -> dict:

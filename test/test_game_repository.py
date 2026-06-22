@@ -425,6 +425,20 @@ class TestGameRepository(unittest.TestCase):
         self.assertEqual(by_move["3c3d"].sfen, after_76)
         self.assertEqual(by_move["3c3d"].avg_eval, None)
 
+    def test_iter_opening_position_pairs_returns_progress_targets(self):
+        start_sfen = "startpos b - 1"
+        after_76 = "after 7g7f w - 2"
+        positions = [
+            opening_position(0, start_sfen, None, None),
+            opening_position(1, after_76, "7g7f", 100),
+        ]
+        self.repository.save_game(self.game, positions)
+
+        pairs = list(self.repository.iter_opening_position_pairs())
+
+        self.assertEqual(self.repository.count_opening_position_pairs(), 1)
+        self.assertEqual(pairs, [(start_sfen, "7g7f", 100)])
+
     def test_list_opening_aggregates_uses_requested_source(self):
         self.repository.save_game(self.game, self.positions)
 

@@ -373,6 +373,34 @@ class TestShogiDbApi(unittest.TestCase):
             {opening["move"] for opening in response["openings"]},
         )
 
+    def test_rebuild_openings_with_progress(self):
+        progress = []
+        self.api.import_game(KIF_WITH_ANALYSIS)
+
+        response = self.api.rebuild_openings_with_progress(
+            progress_callback=lambda processed, total: progress.append((processed, total)),
+        )
+
+        self.assertEqual(response["source"], "self")
+        self.assertEqual(response["processed"], response["total"])
+        self.assertGreater(response["total"], 0)
+        self.assertFalse(response["canceled"])
+        self.assertEqual(progress[0][0], 0)
+        self.assertEqual(progress[-1], (response["total"], response["total"]))
+
+    def test_rebuild_openings_with_progress_can_cancel_before_upsert(self):
+        progress = []
+        self.api.import_game(KIF_WITH_ANALYSIS)
+
+        response = self.api.rebuild_openings_with_progress(
+            progress_callback=lambda processed, total: progress.append((processed, total)),
+            should_cancel=lambda: bool(progress),
+        )
+
+        self.assertTrue(response["canceled"])
+        self.assertEqual(response["count"], 0)
+        self.assertEqual(self.repository.list_openings(source="self"), [])
+
     def test_rebuild_openings_rejects_empty_source(self):
         with self.assertRaises(ApiError) as context:
             self.api.rebuild_openings("")
