@@ -721,6 +721,8 @@ function renderBoard() {
       square.className = classes.join(" ");
       square.dataset.file = String(9 - columnIndex);
       square.dataset.rank = String.fromCharCode("a".charCodeAt(0) + rowIndex);
+      square.style.setProperty("--piece-shift-x", `${4 - columnIndex}px`);
+      square.style.setProperty("--piece-shift-y", `${4 - rowIndex}px`);
       if (piece) {
         square.appendChild(renderPiece(piece));
       }

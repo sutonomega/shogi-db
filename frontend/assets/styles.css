@@ -617,10 +617,11 @@ input {
   place-items: center;
   width: 82%;
   height: 82%;
+  transform: translate(var(--piece-shift-x, 0), var(--piece-shift-y, 0));
 }
 
 .piece.white.text-piece {
-  transform: rotate(180deg);
+  transform: translate(var(--piece-shift-x, 0), var(--piece-shift-y, 0)) rotate(180deg);
 }
 
 .piece-image {
