@@ -99,7 +99,7 @@ CREATE INDEX idx_move_occurrences_sfen ON move_occurrences(sfen);
 
 ## `openings` — 定跡 DB
 
-KIF を大量に取り込んで集計した局面ごとの指し手統計。
+KIF を大量に登録して集計した局面ごとの指し手統計。
 
 ```sql
 CREATE TABLE openings (
@@ -123,12 +123,12 @@ CREATE INDEX idx_openings_source_sfen ON openings(source, sfen);
 
 | source | 内容 |
 |---|---|
-| `self` | 自分の実戦棋譜から集計した定跡 |
+| `self` | 自分の実戦棋譜から集計した候補手（互換用） |
 | `yaneou` | やねうら王定跡 DB など外部定跡 |
 | `professional` | プロ棋譜由来の統計 |
 | `floodgate` | Floodgate など公開対局由来の統計 |
 
-MVP では `self` のみを扱い、外部 source は Phase 3 以降で取り込む。
+定跡登録 UI では初期 source として `professional` を使う。`self` は過去の自分用集計との互換用として残す。
 
 ### 保存例
 
@@ -154,7 +154,7 @@ source='self' の count・avg_eval を更新（UPSERT）
 openings テーブルへ反映
 ```
 
-外部定跡 DB は、変換ツールを利用して SFEN と指し手の列へ変換できる場合に `source` を分けて `openings` へ取り込む。
+外部定跡 DB は、変換ツールを利用して SFEN と指し手の列へ変換できる場合に `source` を分けて `openings` へ登録する。
 
 ---
 

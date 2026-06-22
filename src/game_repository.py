@@ -76,6 +76,7 @@ class BlunderRecord:
     game_id: int
     move_number: int
     move: str
+    previous_sfen: str
     black: str
     white: str
     eval_before: int
@@ -597,6 +598,7 @@ class GameRepository:
                 games.white AS white,
                 moves.move_number AS move_number,
                 moves.move AS move,
+                moves.previous_sfen AS previous_sfen,
                 moves.eval_before AS eval_before,
                 moves.eval_after AS eval_after,
                 moves.eval_delta AS eval_delta,
@@ -621,6 +623,7 @@ class GameRepository:
                 game_id=int(row["game_id"]),
                 move_number=int(row["move_number"]),
                 move=row["move"],
+                previous_sfen=row["previous_sfen"],
                 black=row["black"],
                 white=row["white"],
                 eval_before=int(row["eval_before"]),
@@ -677,6 +680,44 @@ class GameRepository:
                 ON CONFLICT(source, sfen, move) DO UPDATE SET
                     count = excluded.count,
                     avg_eval = excluded.avg_eval,
+                    updated_at = datetime('now')
+                """,
+                [
+                    (
+                        aggregate.source,
+                        aggregate.sfen,
+                        aggregate.move,
+                        aggregate.count,
+                        aggregate.avg_eval,
+                    )
+                    for aggregate in aggregates
+                ],
+            )
+        return len(aggregates)
+
+    def add_opening_aggregates(
+        self,
+        aggregates: list[OpeningAggregate],
+    ) -> int:
+        with self.connection:
+            self.connection.executemany(
+                """
+                INSERT INTO openings (
+                    source, sfen, move, count, avg_eval, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(source, sfen, move) DO UPDATE SET
+                    avg_eval = CASE
+                        WHEN openings.avg_eval IS NULL THEN excluded.avg_eval
+                        WHEN excluded.avg_eval IS NULL THEN openings.avg_eval
+                        ELSE CAST(ROUND(
+                            (
+                                openings.avg_eval * openings.count
+                                + excluded.avg_eval * excluded.count
+                            ) * 1.0 / (openings.count + excluded.count)
+                        ) AS INTEGER)
+                    END,
+                    count = openings.count + excluded.count,
                     updated_at = datetime('now')
                 """,
                 [

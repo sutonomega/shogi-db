@@ -195,6 +195,28 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_import_opening_games_from_directory(self):
+        progress = []
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "first.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "second.kif").write_bytes(SHIKENBISHA_KIF.encode("cp932"))
+
+            response = self.api.import_opening_games_from_directory(
+                str(directory),
+                source="professional",
+                progress_callback=lambda processed, total: progress.append((processed, total)),
+            )
+
+        self.assertEqual(response["source"], "professional")
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 2)
+        self.assertEqual(response["failed"], 0)
+        self.assertGreater(response["openings_count"], 0)
+        self.assertEqual(progress[0], (0, 2))
+        self.assertEqual(progress[-1], (2, 2))
+        self.assertEqual(len(self.api.list_games()["games"]), 0)
+
     def test_import_game_detects_strategy(self):
         response = self.api.import_game(SHIKENBISHA_KIF)
 
@@ -236,6 +258,7 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(response["blunders"][0]["move_number"], 3)
         self.assertEqual(response["blunders"][0]["move"], "2g2f")
+        self.assertIn(" b ", response["blunders"][0]["previous_sfen"])
         self.assertEqual(response["blunders"][0]["eval_before"], 80)
         self.assertEqual(response["blunders"][0]["eval_after"], -120)
         self.assertEqual(response["blunders"][0]["eval_delta"], -200)
@@ -356,14 +379,34 @@ class TestShogiDbApi(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_import_opening_game_saves_professional_openings(self):
+        response = self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+
+        openings = self.repository.list_openings(source="professional")
+        openings_by_move = {opening.move: opening for opening in openings}
+
+        self.assertEqual(response["source"], "professional")
+        self.assertEqual(response["count"], len(openings))
+        self.assertEqual(openings_by_move["7g7f"].count, 1)
+        self.assertEqual(self.repository.list_games(), [])
+
+    def test_import_opening_game_adds_to_existing_openings(self):
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+
+        openings = self.repository.list_openings(source="professional")
+        openings_by_move = {opening.move: opening for opening in openings}
+
+        self.assertEqual(openings_by_move["7g7f"].count, 2)
+
     def test_get_openings(self):
         first_game = self.api.import_game(KIF_WITH_ANALYSIS)
         start_sfen = self.api.get_positions(first_game["game"]["id"])["positions"][0]["sfen"]
-        self.api.rebuild_openings()
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
 
-        response = self.api.get_openings(start_sfen)
+        response = self.api.get_openings(start_sfen, source="professional")
 
-        self.assertEqual(response["source"], "self")
+        self.assertEqual(response["source"], "professional")
         self.assertEqual(response["sfen"], start_sfen)
         self.assertEqual(response["total"], 1)
         self.assertEqual(response["moves"][0]["move"], "7g7f")
@@ -513,7 +556,7 @@ class TestShogiDbApi(unittest.TestCase):
 
     def test_get_position_explanation_prompt(self):
         game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
-        self.api.rebuild_openings()
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
         position_id = self.repository.list_positions(game_id)[1].id
 
         response = self.api.get_position_explanation_prompt(position_id)

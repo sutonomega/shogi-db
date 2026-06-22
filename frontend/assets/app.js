@@ -75,6 +75,18 @@ const japaneseRanks = {
 
 const rowsElement = document.querySelector("#gameRows");
 const statusPanel = document.querySelector("#statusPanel");
+const gameRegistrationPanel = document.querySelector("#gameRegistrationPanel");
+const openingManagementPanel = document.querySelector("#openingManagementPanel");
+const openingManagementSummary = document.querySelector("#openingManagementSummary");
+const openingImportForm = document.querySelector("#openingImportForm");
+const openingFileInput = document.querySelector("#openingFileInput");
+const openingFileName = document.querySelector("#openingFileName");
+const openingImportButton = document.querySelector("#openingImportButton");
+const openingDirectoryImportForm = document.querySelector("#openingDirectoryImportForm");
+const openingDirectoryPathInput = document.querySelector("#openingDirectoryPathInput");
+const openingRecursiveImportInput = document.querySelector("#openingRecursiveImportInput");
+const openingDirectoryImportButton = document.querySelector("#openingDirectoryImportButton");
+const openingCancelDirectoryImportButton = document.querySelector("#openingCancelDirectoryImportButton");
 const strategyStatsPanel = document.querySelector("#strategyStatsPanel");
 const strategyStatsList = document.querySelector("#strategyStatsList");
 const strategyStatsSummary = document.querySelector("#strategyStatsSummary");
@@ -126,7 +138,6 @@ const moveFrequencyList = document.querySelector("#moveFrequencyList");
 const moveFrequencySummary = document.querySelector("#moveFrequencySummary");
 const openingList = document.querySelector("#openingList");
 const openingSummary = document.querySelector("#openingSummary");
-const rebuildOpeningsButton = document.querySelector("#rebuildOpeningsButton");
 const openingComparisonSummary = document.querySelector("#openingComparisonSummary");
 const openingComparisonMissing = document.querySelector("#openingComparisonMissing");
 const openingComparisonPrompt = document.querySelector("#openingComparisonPrompt");
@@ -196,6 +207,8 @@ function setStatus(message, kind = "info") {
 function showListView() {
   pageSubtitle.textContent = "対局一覧";
   listToolbar.hidden = false;
+  gameRegistrationPanel.hidden = false;
+  openingManagementPanel.hidden = false;
   strategyStatsPanel.hidden = false;
   enclosureStatsPanel.hidden = false;
   blunderPanel.hidden = false;
@@ -208,6 +221,8 @@ function showListView() {
 function showViewerView() {
   pageSubtitle.textContent = "棋譜ビューア";
   listToolbar.hidden = true;
+  gameRegistrationPanel.hidden = true;
+  openingManagementPanel.hidden = true;
   strategyStatsPanel.hidden = true;
   enclosureStatsPanel.hidden = true;
   blunderPanel.hidden = true;
@@ -267,6 +282,12 @@ function updateImportFileName() {
   importButton.disabled = !file;
 }
 
+function updateOpeningFileName() {
+  const file = openingFileInput.files?.[0] || null;
+  openingFileName.textContent = file ? file.name : "未選択";
+  openingImportButton.disabled = !file;
+}
+
 function renderStrategyStats() {
   renderStatsList({
     stats: state.strategyStats,
@@ -306,7 +327,7 @@ function renderBlunders() {
     item.className = "stats-item";
 
     const name = document.createElement("strong");
-    name.textContent = `${blunder.move_number}手目 ${blunder.move}`;
+    name.textContent = `${blunder.move_number}手目 ${moveLabelForCandidate(blunder.move, blunder.previous_sfen)}`;
     item.appendChild(name);
 
     const details = document.createElement("span");
@@ -403,7 +424,7 @@ function renderOpenings() {
   if (!state.openings.length) {
     const empty = document.createElement("p");
     empty.className = "stats-empty";
-    empty.textContent = "この局面の保存済み定跡はありません";
+    empty.textContent = "この局面の登録済み定跡はありません";
     openingList.appendChild(empty);
     return;
   }
@@ -643,7 +664,7 @@ function renderEngineCandidates(position) {
   if (!candidates.length) {
     const empty = document.createElement("p");
     empty.className = "candidate-empty";
-    empty.textContent = "候補手データはありません。水匠解析付きKIFを取り込むか、この局面を解析してください。";
+    empty.textContent = "候補手データはありません。水匠解析付きKIFを登録するか、この局面を解析してください。";
     candidateList.appendChild(empty);
     return;
   }
@@ -1195,7 +1216,7 @@ async function loadOpenings() {
 
   try {
     const query = new URLSearchParams({
-      source: "self",
+      source: "professional",
       sfen: position.sfen,
     });
     const response = await fetch(`/api/openings?${query.toString()}`);
@@ -1217,27 +1238,132 @@ async function loadOpenings() {
   }
 }
 
-async function rebuildOpenings() {
-  rebuildOpeningsButton.disabled = true;
-  setStatus("定跡DBを更新中");
+async function importOpeningFile(file) {
+  openingImportButton.disabled = true;
+  openingManagementSummary.textContent = "登録中";
+  setStatus("定跡KIFを登録中");
   try {
-    const response = await fetch("/api/openings/rebuild", {
+    const response = await fetch("/api/openings/import?source=professional", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/octet-stream",
       },
-      body: JSON.stringify({ source: "self" }),
+      body: file,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
     await loadOpenings();
-    setStatus(`定跡DBを更新しました: ${payload.count}件`);
+    openingManagementSummary.textContent = `${payload.count}件`;
+    setStatus(`定跡KIFを登録しました: ${payload.count}件`);
+    openingFileInput.value = "";
+    updateOpeningFileName();
   } catch (error) {
-    setStatus(`定跡DBを更新できませんでした: ${error.message}`, "error");
+    openingManagementSummary.textContent = "失敗";
+    setStatus(`定跡KIFを登録できませんでした: ${error.message}`, "error");
   } finally {
-    rebuildOpeningsButton.disabled = false;
+    updateOpeningFileName();
+  }
+}
+
+async function importOpeningDirectory(directoryPath, recursive) {
+  openingDirectoryImportButton.disabled = true;
+  openingCancelDirectoryImportButton.hidden = false;
+  openingCancelDirectoryImportButton.disabled = true;
+  openingManagementSummary.textContent = "0/0";
+  setStatus("定跡KIFフォルダを登録中");
+  try {
+    const response = await fetch("/api/openings/import-directory", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: directoryPath,
+        recursive,
+        source: "professional",
+        async: true,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    openingCancelDirectoryImportButton.dataset.jobId = payload.id;
+    openingCancelDirectoryImportButton.disabled = false;
+    await pollOpeningDirectoryImportJob(payload.id);
+  } catch (error) {
+    openingManagementSummary.textContent = "失敗";
+    setStatus(`定跡KIFフォルダを登録できませんでした: ${error.message}`, "error");
+  } finally {
+    openingDirectoryImportButton.disabled = false;
+    openingCancelDirectoryImportButton.hidden = true;
+    openingCancelDirectoryImportButton.disabled = false;
+    delete openingCancelDirectoryImportButton.dataset.jobId;
+  }
+}
+
+async function pollOpeningDirectoryImportJob(jobId) {
+  let payload = null;
+  while (true) {
+    const response = await fetch(`/api/openings/import-directory/jobs/${jobId}`);
+    payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setOpeningDirectoryImportStatus(payload);
+    if (payload.done) break;
+    await wait(500);
+  }
+  await loadOpenings();
+  if (payload.status === "canceled") {
+    setStatus(`定跡一括登録をキャンセルしました: ${payload.processed}/${payload.total}`);
+    return;
+  }
+  openingManagementSummary.textContent = `${payload.openings_count}手`;
+  const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
+  setStatus(`定跡一括登録完了: ${payload.imported}/${payload.total}件${failedText}`);
+}
+
+function setOpeningDirectoryImportStatus(payload) {
+  if (payload.status === "scanning") {
+    openingManagementSummary.textContent = "スキャン中";
+    setStatus("定跡KIFフォルダをスキャン中");
+    return;
+  }
+  if (payload.status === "failed") {
+    openingManagementSummary.textContent = "失敗";
+    setStatus(`定跡一括登録失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
+    return;
+  }
+  const total = Number.isFinite(payload.total) ? payload.total : 0;
+  const processed = Number.isFinite(payload.processed) ? payload.processed : 0;
+  openingManagementSummary.textContent = `${processed}/${total}`;
+  if (payload.status === "canceling") {
+    setStatus(`定跡一括登録をキャンセル中: ${processed}/${total}`);
+    return;
+  }
+  setStatus(`定跡一括登録中: ${processed}/${total}`);
+}
+
+async function cancelOpeningDirectoryImport() {
+  const jobId = openingCancelDirectoryImportButton.dataset.jobId;
+  if (!jobId) return;
+  openingCancelDirectoryImportButton.disabled = true;
+  setStatus("定跡一括登録をキャンセル中");
+  try {
+    const response = await fetch(`/api/openings/import-directory/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setOpeningDirectoryImportStatus(payload);
+  } catch (error) {
+    setStatus(`定跡一括登録をキャンセルできませんでした: ${error.message}`, "error");
+    openingCancelDirectoryImportButton.disabled = false;
   }
 }
 
@@ -1431,7 +1557,7 @@ async function analyzeCurrentPositionForCandidates() {
 
 async function importKifFile(file) {
   importButton.disabled = true;
-  setStatus("取り込み中");
+  setStatus("登録中");
   try {
     const response = await fetch("/api/games/import", {
       method: "POST",
@@ -1447,9 +1573,9 @@ async function importKifFile(file) {
     kifFileInput.value = "";
     updateImportFileName();
     await loadGames();
-    setStatus(`取り込みました: ${payload.game.black} vs ${payload.game.white}`);
+    setStatus(`登録しました: ${payload.game.black} vs ${payload.game.white}`);
   } catch (error) {
-    setStatus(`KIFを取り込めませんでした: ${error.message}`, "error");
+    setStatus(`KIFを登録できませんでした: ${error.message}`, "error");
   } finally {
     updateImportFileName();
   }
@@ -1459,7 +1585,7 @@ async function importKifDirectory(directoryPath, recursive) {
   directoryImportButton.disabled = true;
   cancelDirectoryImportButton.hidden = false;
   cancelDirectoryImportButton.disabled = true;
-  setStatus("一括取り込み中");
+  setStatus("一括登録中");
   try {
     const response = await fetch("/api/games/import-directory", {
       method: "POST",
@@ -1480,7 +1606,7 @@ async function importKifDirectory(directoryPath, recursive) {
     cancelDirectoryImportButton.disabled = false;
     await pollDirectoryImportJob(payload.id);
   } catch (error) {
-    setStatus(`KIFフォルダを取り込めませんでした: ${error.message}`, "error");
+    setStatus(`KIFフォルダを登録できませんでした: ${error.message}`, "error");
   } finally {
     directoryImportButton.disabled = false;
     cancelDirectoryImportButton.hidden = true;
@@ -1503,11 +1629,11 @@ async function pollDirectoryImportJob(jobId) {
   }
   await loadGames();
   if (payload.status === "canceled") {
-    setStatus(`一括取り込みをキャンセルしました: ${payload.processed}/${payload.total}`);
+    setStatus(`一括登録をキャンセルしました: ${payload.processed}/${payload.total}`);
     return;
   }
   const failedText = payload.failed ? ` / 失敗 ${payload.failed}件` : "";
-  setStatus(`一括取り込み完了: ${payload.imported} / ${payload.total}件${failedText}`);
+  setStatus(`一括登録完了: ${payload.imported} / ${payload.total}件${failedText}`);
 }
 
 function setDirectoryImportStatus(payload) {
@@ -1516,23 +1642,23 @@ function setDirectoryImportStatus(payload) {
     return;
   }
   if (payload.status === "failed") {
-    setStatus(`一括取り込み失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
+    setStatus(`一括登録失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
     return;
   }
   if (payload.status === "canceling") {
-    setStatus(`一括取り込みをキャンセル中: ${payload.processed}/${payload.total}`);
+    setStatus(`一括登録をキャンセル中: ${payload.processed}/${payload.total}`);
     return;
   }
   const total = Number.isFinite(payload.total) ? payload.total : 0;
   const processed = Number.isFinite(payload.processed) ? payload.processed : 0;
-  setStatus(`一括取り込み中: ${processed}/${total}`);
+  setStatus(`一括登録中: ${processed}/${total}`);
 }
 
 async function cancelDirectoryImport() {
   const jobId = cancelDirectoryImportButton.dataset.jobId;
   if (!jobId) return;
   cancelDirectoryImportButton.disabled = true;
-  setStatus("一括取り込みをキャンセル中");
+  setStatus("一括登録をキャンセル中");
   try {
     const response = await fetch(`/api/games/import-directory/jobs/${jobId}/cancel`, {
       method: "POST",
@@ -1560,6 +1686,7 @@ searchInput.addEventListener("input", (event) => {
 });
 
 kifFileInput.addEventListener("change", updateImportFileName);
+openingFileInput.addEventListener("change", updateOpeningFileName);
 
 importForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1579,7 +1706,23 @@ directoryImportForm.addEventListener("submit", (event) => {
 });
 
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
-rebuildOpeningsButton.addEventListener("click", rebuildOpenings);
+openingImportForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const file = openingFileInput.files?.[0] || null;
+  if (!file) return;
+  importOpeningFile(file);
+});
+
+openingDirectoryImportForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const directoryPath = openingDirectoryPathInput.value.trim();
+  if (!directoryPath) {
+    setStatus("定跡KIFフォルダのパスを入力してください", "error");
+    return;
+  }
+  importOpeningDirectory(directoryPath, openingRecursiveImportInput.checked);
+});
+openingCancelDirectoryImportButton.addEventListener("click", cancelOpeningDirectoryImport);
 buildOpeningComparisonButton.addEventListener("click", loadOpeningComparisonPrompt);
 generateOpeningComparisonButton.addEventListener("click", generateOpeningComparison);
 buildExplanationPromptButton.addEventListener("click", loadExplanationPrompt);

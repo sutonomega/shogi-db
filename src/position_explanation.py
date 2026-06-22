@@ -40,7 +40,7 @@ def build_position_explanation_prompt(materials: dict) -> str:
             f"- 最善手: {_format_nullable(materials.get('best_move'))}",
             f"- 読み筋: {_format_nullable(materials.get('pv'))}",
             f"- 候補手: {candidates_text}",
-            f"- 自分専用定跡候補: {openings_text}",
+            f"- 定跡候補: {openings_text}",
             f"- 不足項目: {missing_text}",
             "",
             "出力:",
@@ -125,7 +125,7 @@ def _missing_fields(materials: dict) -> list[str]:
     if not materials.get("candidates"):
         missing.append("候補手")
     if not materials.get("openings"):
-        missing.append("自分専用定跡候補")
+        missing.append("定跡候補")
     return missing
 
 
