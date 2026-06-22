@@ -3,6 +3,11 @@
 """
 
 from __future__ import annotations
+from .japanese_move import (
+    format_usi_move_with_japanese,
+    format_usi_pv_with_japanese,
+    usi_to_japanese_move,
+)
 
 import shlex
 import subprocess
@@ -16,15 +21,55 @@ ANSI_ESCAPE_PATTERN = re.compile(
     r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 )
 
+def _format_move(materials: dict, move: str | None) -> str:
+    return _format_move_from_sfen(
+        materials.get("sfen"),
+        move,
+    )
 
 def strip_ansi_escape(text: str) -> str:
     return ANSI_ESCAPE_PATTERN.sub("", text)
 
+def _format_move_from_sfen(sfen: str | None, move: str | None) -> str:
+    if not move:
+        return "なし"
+
+    if not sfen:
+        return move
+
+    try:
+        japanese = usi_to_japanese_move(
+            sfen,
+            move,
+        )
+    except Exception:
+        return move
+
+    if japanese.endswith("?"):
+        return move
+
+    return f"{move}（{japanese}）"
+
+def _format_pv(materials: dict) -> str:
+    pv = materials.get("pv")
+    if not pv:
+        return "なし"
+
+    try:
+        formatted = format_usi_pv_with_japanese(
+            materials["sfen"],
+            pv,
+        )
+    except Exception:
+        return pv
+
+    return formatted or pv
+
 def build_position_explanation_prompt(materials: dict) -> str:
     missing = materials.get("missing", [])
     missing_text = "なし" if not missing else "、".join(missing)
-    candidates_text = _format_candidates(materials.get("candidates", []))
-    openings_text = _format_openings(materials.get("openings", []))
+    candidates_text = _format_candidates(materials.get("candidates", []),materials,)
+    openings_text = _format_openings(materials.get("openings", []),materials,)
     previous = materials.get("previous_position")
     previous_sfen = previous.get("sfen") if previous else None
 
@@ -55,10 +100,10 @@ def build_position_explanation_prompt(materials: dict) -> str:
             f"- 評価値変化: {_format_eval(materials.get('eval_delta'))}",
             f"- 損失: {_format_loss(materials.get('loss'))}",
             f"- 解説粒度: {materials['severity']}",
-            f"- 最善手: {_format_nullable(materials.get('best_move'))}",
+            f"- 最善手: {_format_move_from_sfen(materials.get('sfen'), materials.get('best_move'))}",
             f"- 候補手上位評価値: {_format_eval(materials.get('top_candidate_eval'))}",
             f"- 候補手上位との差: {_format_eval(materials.get('top_candidate_eval_gap'))}",
-            f"- 読み筋: {_format_nullable(materials.get('pv'))}",
+            f"- 読み筋: {_format_pv(materials)}",
             f"- 候補手: {candidates_text}",
             f"- 定跡候補: {openings_text}",
             f"- 不足項目: {missing_text}",
@@ -223,21 +268,29 @@ def _format_nullable(value: str | None) -> str:
     return value if value else "なし"
 
 
-def _format_candidates(candidates: list[dict]) -> str:
+def _format_candidates(
+    candidates: list[dict],
+    materials: dict,
+) -> str:
     if not candidates:
         return "なし"
+
     return "、".join(
-        f"{candidate.get('move', '不明')}({_format_eval(candidate.get('eval'))})"
+        (
+            f"{_format_move(materials, candidate.get('move'))}"
+            f"({_format_eval(candidate.get('eval'))})"
+        )
         for candidate in candidates
     )
 
 
-def _format_openings(openings: list[dict]) -> str:
+def _format_openings(openings: list[dict],materials: dict,) -> str:
     if not openings:
         return "なし"
+
     return "、".join(
         (
-            f"{opening.get('move', '不明')}"
+            f"{_format_move(materials, opening.get('move'))}"
             f"(出現{opening.get('count', 0)}回"
             f"、平均評価値{_format_eval(opening.get('avg_eval'))})"
         )
