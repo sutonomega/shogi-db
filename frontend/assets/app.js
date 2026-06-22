@@ -27,6 +27,10 @@ const state = {
   selectedCandidateMove: null,
   candidateAnalysisStatus: "idle",
   candidateStatusText: "候補手は水匠解析付きKIFまたは局面解析後に表示されます",
+  displaySettings: {
+    boardTheme: "light",
+    pieceTheme: "hitomoji",
+  },
 };
 
 const pieceLabels = {
@@ -48,6 +52,41 @@ const promotedLabels = {
   B: "馬",
   R: "龍",
 };
+
+const boardThemes = {
+  light: "/assets/shogi/boards/light_458x500.png",
+  warm: "/assets/shogi/boards/warm_458x500.png",
+  resin: "/assets/shogi/boards/resin_458x500.png",
+  dark: "/assets/shogi/boards/dark_458x500.png",
+};
+
+const pieceThemes = new Set([
+  "hitomoji",
+  "hitomoji_wood",
+  "hitomoji_gothic",
+  "hitomoji_dark",
+  "hitomoji_gothic_dark",
+  "futamoji",
+]);
+
+const pieceAssetNames = {
+  P: "pawn",
+  L: "lance",
+  N: "knight",
+  S: "silver",
+  G: "gold",
+  B: "bishop",
+  R: "rook",
+  K: "king",
+  "+P": "prom_pawn",
+  "+L": "prom_lance",
+  "+N": "prom_knight",
+  "+S": "prom_silver",
+  "+B": "horse",
+  "+R": "dragon",
+};
+
+const displaySettingsStorageKey = "shogi-db-display-settings";
 
 const japaneseFiles = {
   1: "１",
@@ -111,6 +150,10 @@ const recursiveImportInput = document.querySelector("#recursiveImportInput");
 const directoryImportButton = document.querySelector("#directoryImportButton");
 const cancelDirectoryImportButton = document.querySelector("#cancelDirectoryImportButton");
 const refreshButton = document.querySelector("#refreshButton");
+const settingsButton = document.querySelector("#settingsButton");
+const settingsPanel = document.querySelector("#settingsPanel");
+const boardThemeSelect = document.querySelector("#boardThemeSelect");
+const pieceThemeSelect = document.querySelector("#pieceThemeSelect");
 const backButton = document.querySelector("#backButton");
 const pageSubtitle = document.querySelector("#pageSubtitle");
 const listToolbar = document.querySelector("#listToolbar");
@@ -596,8 +639,58 @@ function parseHands(handsPart) {
   return hands;
 }
 
+function loadDisplaySettings() {
+  try {
+    const raw = window.localStorage.getItem(displaySettingsStorageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const boardTheme = boardThemes[parsed.boardTheme] ? parsed.boardTheme : state.displaySettings.boardTheme;
+    const pieceTheme = pieceThemes.has(parsed.pieceTheme) ? parsed.pieceTheme : state.displaySettings.pieceTheme;
+    state.displaySettings = { boardTheme, pieceTheme };
+  } catch {
+    state.displaySettings = {
+      boardTheme: "light",
+      pieceTheme: "hitomoji",
+    };
+  }
+  syncDisplaySettingsControls();
+  applyBoardTheme();
+}
+
+function saveDisplaySettings() {
+  window.localStorage.setItem(displaySettingsStorageKey, JSON.stringify(state.displaySettings));
+}
+
+function syncDisplaySettingsControls() {
+  boardThemeSelect.value = state.displaySettings.boardTheme;
+  pieceThemeSelect.value = state.displaySettings.pieceTheme;
+}
+
+function applyBoardTheme() {
+  const imagePath = boardThemes[state.displaySettings.boardTheme] || boardThemes.light;
+  boardGrid.style.backgroundImage = `url("${imagePath}")`;
+}
+
+function updateDisplaySetting(key, value) {
+  if (key === "boardTheme" && !boardThemes[value]) return;
+  if (key === "pieceTheme" && !pieceThemes.has(value)) return;
+  state.displaySettings = {
+    ...state.displaySettings,
+    [key]: value,
+  };
+  saveDisplaySettings();
+  applyBoardTheme();
+  renderBoard();
+}
+
+function toggleSettingsPanel() {
+  const isHidden = settingsPanel.hidden;
+  settingsPanel.hidden = !isHidden;
+  settingsButton.setAttribute("aria-expanded", String(isHidden));
+}
+
 function renderBoard() {
   const position = state.positions[state.currentMove];
+  applyBoardTheme();
   if (!position) {
     boardGrid.textContent = "";
     blackHand.textContent = "なし";
@@ -629,11 +722,7 @@ function renderBoard() {
       square.dataset.file = String(9 - columnIndex);
       square.dataset.rank = String.fromCharCode("a".charCodeAt(0) + rowIndex);
       if (piece) {
-        const span = document.createElement("span");
-        const basePiece = piece.replace("+", "");
-        span.className = `piece ${basePiece === basePiece.toLowerCase() ? "white" : "black"}`;
-        span.textContent = pieceLabel(piece);
-        square.appendChild(span);
+        square.appendChild(renderPiece(piece));
       }
       boardGrid.appendChild(square);
     }
@@ -651,6 +740,43 @@ function renderBoard() {
   renderEvalGraph();
   renderExplanationPrompt();
   updateMoveControls();
+}
+
+function renderPiece(piece) {
+  const span = document.createElement("span");
+  const basePiece = piece.replace("+", "");
+  const owner = basePiece === basePiece.toLowerCase() ? "white" : "black";
+  const label = pieceLabel(piece);
+  span.className = `piece ${owner}`;
+  span.title = label;
+
+  const imagePath = pieceImagePath(piece, owner);
+  if (!imagePath) {
+    span.classList.add("text-piece");
+    span.textContent = label;
+    return span;
+  }
+
+  const image = document.createElement("img");
+  image.className = "piece-image";
+  image.src = imagePath;
+  image.alt = label;
+  image.addEventListener("error", () => {
+    image.remove();
+    span.classList.add("text-piece");
+    span.textContent = label;
+  }, { once: true });
+  span.appendChild(image);
+  return span;
+}
+
+function pieceImagePath(piece, owner) {
+  const normalizedPiece = piece.startsWith("+")
+    ? `+${piece[1].toUpperCase()}`
+    : piece.toUpperCase();
+  const assetName = pieceAssetNames[normalizedPiece];
+  if (!assetName) return null;
+  return `/assets/shogi/pieces/${state.displaySettings.pieceTheme}/${owner}_${assetName}.png`;
 }
 
 function renderEngineCandidates(position) {
@@ -1834,6 +1960,14 @@ refreshButton.addEventListener("click", () => {
   loadGames();
 });
 
+settingsButton.addEventListener("click", toggleSettingsPanel);
+boardThemeSelect.addEventListener("change", (event) => {
+  updateDisplaySetting("boardTheme", event.target.value);
+});
+pieceThemeSelect.addEventListener("change", (event) => {
+  updateDisplaySetting("pieceTheme", event.target.value);
+});
+
 backButton.addEventListener("click", () => {
   window.location.href = "/";
 });
@@ -1843,6 +1977,8 @@ prevMoveButton.addEventListener("click", () => setCurrentMove(state.currentMove 
 nextMoveButton.addEventListener("click", () => setCurrentMove(state.currentMove + 1));
 lastMoveButton.addEventListener("click", () => setCurrentMove(state.positions.length - 1));
 moveSlider.addEventListener("input", (event) => setCurrentMove(Number(event.target.value)));
+
+loadDisplaySettings();
 
 const gameId = gameIdFromPath();
 if (gameId) {

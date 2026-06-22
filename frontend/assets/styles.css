@@ -78,6 +78,19 @@ input {
   cursor: pointer;
 }
 
+.settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
 .back-link {
   height: 36px;
   border: 0;
@@ -93,6 +106,11 @@ input {
 }
 
 .icon-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.settings-button:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -264,6 +282,43 @@ input {
   border-color: #efb2b2;
   color: var(--danger);
   background: #fff5f5;
+}
+
+.settings-panel {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.settings-panel h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.settings-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 240px));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.settings-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-controls select {
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .stats-panel,
@@ -513,10 +568,14 @@ input {
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
   width: min(100%, 468px);
-  aspect-ratio: 1;
+  aspect-ratio: 458 / 500;
   margin: 0 auto;
   border: 2px solid #2f2a24;
-  background: #d7a95f;
+  padding: 6px 7px 7px 6px;
+  background-color: #d7a95f;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
 .square {
@@ -525,8 +584,6 @@ input {
   place-items: center;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid rgba(47, 42, 36, 0.85);
-  border-bottom: 1px solid rgba(47, 42, 36, 0.85);
   color: #1f2933;
   font-size: clamp(18px, 5.6vw, 30px);
   font-weight: 600;
@@ -556,16 +613,22 @@ input {
   pointer-events: none;
 }
 
-.square:nth-child(9n) {
-  border-right: 0;
+.piece {
+  display: grid;
+  place-items: center;
+  width: 82%;
+  height: 82%;
 }
 
-.square:nth-last-child(-n + 9) {
-  border-bottom: 0;
-}
-
-.piece.white {
+.piece.white.text-piece {
   transform: rotate(180deg);
+}
+
+.piece-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .move-controls {
@@ -958,6 +1021,10 @@ input {
   .registration-controls {
     grid-template-columns: 1fr;
     justify-content: stretch;
+  }
+
+  .settings-controls {
+    grid-template-columns: 1fr;
   }
 
   .registration-controls .directory-import-form,
