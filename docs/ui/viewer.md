@@ -41,6 +41,7 @@
 | 文字コード   | UTF-8 / Shift-JIS（CP932）をバックエンドで自動判定 |
 | 送信         | `POST /api/games/import` にファイル bytes を送る   |
 | 一括登録     | `POST /api/games/import-directory` に `async=true` でフォルダパスを送り、進捗とキャンセルを表示する |
+| 定跡DB更新   | `POST /api/openings/rebuild` に `async=true` を送り、自分の棋譜由来の定跡 DB 更新進捗とキャンセルを表示する |
 | 配置         | 単体登録と一括登録を同じ行に並べ、定跡登録と同じ操作レイアウトにする |
 | 成功時       | 対局一覧・集計・悪手ランキングを再読み込みする     |
 | 失敗時       | 画面上部のステータス領域にエラーを表示する         |

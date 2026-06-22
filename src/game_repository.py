@@ -666,6 +666,37 @@ class GameRepository:
             for row in rows
         ]
 
+    def count_opening_position_pairs(self) -> int:
+        row = self.connection.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM positions AS current
+            JOIN positions AS previous
+                ON previous.game_id = current.game_id
+                AND previous.move_number = current.move_number - 1
+            WHERE current.move IS NOT NULL
+            """
+        ).fetchone()
+        return int(row["count"])
+
+    def iter_opening_position_pairs(self):
+        rows = self.connection.execute(
+            """
+            SELECT
+                previous.sfen AS previous_sfen,
+                current.move AS move,
+                current.eval AS eval
+            FROM positions AS current
+            JOIN positions AS previous
+                ON previous.game_id = current.game_id
+                AND previous.move_number = current.move_number - 1
+            WHERE current.move IS NOT NULL
+            ORDER BY current.game_id, current.move_number
+            """
+        )
+        for row in rows:
+            yield row["previous_sfen"], row["move"], row["eval"]
+
     def upsert_opening_aggregates(
         self,
         aggregates: list[OpeningAggregate],

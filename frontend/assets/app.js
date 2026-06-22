@@ -76,6 +76,9 @@ const japaneseRanks = {
 const rowsElement = document.querySelector("#gameRows");
 const statusPanel = document.querySelector("#statusPanel");
 const gameRegistrationPanel = document.querySelector("#gameRegistrationPanel");
+const openingRebuildSummary = document.querySelector("#openingRebuildSummary");
+const openingRebuildButton = document.querySelector("#openingRebuildButton");
+const cancelOpeningRebuildButton = document.querySelector("#cancelOpeningRebuildButton");
 const openingManagementPanel = document.querySelector("#openingManagementPanel");
 const openingManagementSummary = document.querySelector("#openingManagementSummary");
 const openingImportForm = document.querySelector("#openingImportForm");
@@ -1367,6 +1370,102 @@ async function cancelOpeningDirectoryImport() {
   }
 }
 
+async function rebuildOpenings() {
+  openingRebuildButton.disabled = true;
+  cancelOpeningRebuildButton.hidden = false;
+  cancelOpeningRebuildButton.disabled = true;
+  openingRebuildSummary.textContent = "0/0";
+  setStatus("定跡DBを更新中");
+  try {
+    const response = await fetch("/api/openings/rebuild", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: "self",
+        async: true,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    cancelOpeningRebuildButton.dataset.jobId = payload.id;
+    cancelOpeningRebuildButton.disabled = false;
+    await pollOpeningRebuildJob(payload.id);
+  } catch (error) {
+    openingRebuildSummary.textContent = "失敗";
+    setStatus(`定跡DBを更新できませんでした: ${error.message}`, "error");
+  } finally {
+    openingRebuildButton.disabled = false;
+    cancelOpeningRebuildButton.hidden = true;
+    cancelOpeningRebuildButton.disabled = false;
+    delete cancelOpeningRebuildButton.dataset.jobId;
+  }
+}
+
+async function pollOpeningRebuildJob(jobId) {
+  let payload = null;
+  while (true) {
+    const response = await fetch(`/api/openings/rebuild/jobs/${jobId}`);
+    payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setOpeningRebuildStatus(payload);
+    if (payload.done) break;
+    await wait(500);
+  }
+  if (payload.status === "canceled") {
+    setStatus(`定跡DB更新をキャンセルしました: ${payload.processed}/${payload.total}`);
+    return;
+  }
+  openingRebuildSummary.textContent = `${payload.count}件`;
+  setStatus(`定跡DB更新完了: ${payload.processed}/${payload.total}`);
+}
+
+function setOpeningRebuildStatus(payload) {
+  if (payload.status === "scanning") {
+    openingRebuildSummary.textContent = "集計準備中";
+    setStatus("定跡DB更新の対象を確認中");
+    return;
+  }
+  if (payload.status === "failed") {
+    openingRebuildSummary.textContent = "失敗";
+    setStatus(`定跡DB更新失敗: ${payload.errors?.[0]?.error || "不明なエラー"}`, "error");
+    return;
+  }
+  const total = Number.isFinite(payload.total) ? payload.total : 0;
+  const processed = Number.isFinite(payload.processed) ? payload.processed : 0;
+  openingRebuildSummary.textContent = `${processed}/${total}`;
+  if (payload.status === "canceling") {
+    setStatus(`定跡DB更新をキャンセル中: ${processed}/${total}`);
+    return;
+  }
+  setStatus(`定跡DB更新中: ${processed}/${total}`);
+}
+
+async function cancelOpeningRebuild() {
+  const jobId = cancelOpeningRebuildButton.dataset.jobId;
+  if (!jobId) return;
+  cancelOpeningRebuildButton.disabled = true;
+  setStatus("定跡DB更新をキャンセル中");
+  try {
+    const response = await fetch(`/api/openings/rebuild/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    setOpeningRebuildStatus(payload);
+  } catch (error) {
+    setStatus(`定跡DB更新をキャンセルできませんでした: ${error.message}`, "error");
+    cancelOpeningRebuildButton.disabled = false;
+  }
+}
+
 function openingComparisonSources() {
   return ["self", "professional", "yaneou"];
 }
@@ -1706,6 +1805,8 @@ directoryImportForm.addEventListener("submit", (event) => {
 });
 
 cancelDirectoryImportButton.addEventListener("click", cancelDirectoryImport);
+openingRebuildButton.addEventListener("click", rebuildOpenings);
+cancelOpeningRebuildButton.addEventListener("click", cancelOpeningRebuild);
 openingImportForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const file = openingFileInput.files?.[0] || null;

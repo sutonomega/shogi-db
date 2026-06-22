@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 from src.api_server import (
     DirectoryImportJobStore,
     OpeningDirectoryImportJobStore,
+    OpeningRebuildJobStore,
     create_server,
     import_directory_payload,
     import_game_payload,
@@ -18,6 +19,7 @@ from src.api_server import (
     is_import_post_path,
     start_import_directory_payload,
     start_opening_import_directory_payload,
+    start_opening_rebuild_payload,
 )
 from src.api import ShogiDbApi
 from src.game_repository import GameRepository
@@ -144,6 +146,25 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(job["total"], 1)
         self.assertEqual(job["imported"], 1)
         self.assertGreater(job["openings_count"], 0)
+
+    def test_opening_rebuild_endpoint_tracks_progress(self):
+        self._post_json("/api/games/import", {"kif": KIF_TEXT})
+
+        job = self._post_json(
+            "/api/openings/rebuild",
+            {"source": "self", "async": True},
+        )
+        for _ in range(100):
+            job = self._get_json(f"/api/openings/rebuild/jobs/{job['id']}")
+            if job["done"]:
+                break
+            sleep(0.01)
+
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["source"], "self")
+        self.assertEqual(job["processed"], job["total"])
+        self.assertGreater(job["total"], 0)
+        self.assertGreater(job["count"], 0)
 
     def test_blunder_explanation_prompt_endpoint(self):
         kif_text = """\
@@ -341,6 +362,26 @@ class TestImportGamePayload(unittest.TestCase):
         self.assertEqual(job["imported"], 1)
         self.assertGreater(job["openings_count"], 0)
 
+    def test_start_opening_rebuild_payload_tracks_progress(self):
+        self.api.import_game(KIF_TEXT)
+        job_store = OpeningRebuildJobStore(self.api)
+
+        job = start_opening_rebuild_payload(
+            job_store,
+            {"source": "self"},
+        )
+        for _ in range(100):
+            job = job_store.get(job["id"])
+            if job["done"]:
+                break
+            sleep(0.01)
+
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["source"], "self")
+        self.assertEqual(job["processed"], job["total"])
+        self.assertGreater(job["total"], 0)
+        self.assertGreater(job["count"], 0)
+
     def test_import_directory_job_can_be_canceled(self):
         with TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
@@ -363,6 +404,20 @@ class TestImportGamePayload(unittest.TestCase):
 
         self.assertIn(canceled["status"], ("canceling", "completed"))
 
+    def test_opening_rebuild_job_can_be_canceled(self):
+        self.api.import_game(KIF_TEXT)
+        job_store = OpeningRebuildJobStore(self.api)
+
+        job = job_store.start(source="self")
+        canceled = job_store.cancel(job["id"])
+        for _ in range(100):
+            job = job_store.get(job["id"])
+            if job["done"]:
+                break
+            sleep(0.01)
+
+        self.assertIn(canceled["status"], ("canceling", "completed"))
+
     def test_import_post_path_accepts_directory_cancel_endpoint(self):
         self.assertTrue(is_import_post_path("/api/games/import"))
         self.assertTrue(is_import_post_path("/api/games/import-directory"))
@@ -376,6 +431,9 @@ class TestImportGamePayload(unittest.TestCase):
         )
         self.assertTrue(
             is_import_post_path("/api/openings/import-directory/jobs/job-id/cancel")
+        )
+        self.assertTrue(
+            is_import_post_path("/api/openings/rebuild/jobs/job-id/cancel")
         )
         self.assertFalse(is_import_post_path("/api/games/import-directory/jobs/job-id"))
 
