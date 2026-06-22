@@ -571,6 +571,7 @@ input {
   aspect-ratio: 458 / 500;
   margin: 0 auto;
   border: 2px solid #2f2a24;
+  padding: 6px 7px 7px 6px;
   background-color: #d7a95f;
   background-position: center;
   background-repeat: no-repeat;
@@ -617,11 +618,10 @@ input {
   place-items: center;
   width: 82%;
   height: 82%;
-  transform: translate(var(--piece-shift-x, 0), var(--piece-shift-y, 0));
 }
 
 .piece.white.text-piece {
-  transform: translate(var(--piece-shift-x, 0), var(--piece-shift-y, 0)) rotate(180deg);
+  transform: rotate(180deg);
 }
 
 .piece-image {
