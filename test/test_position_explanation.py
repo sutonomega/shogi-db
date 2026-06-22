@@ -46,6 +46,9 @@ class TestPositionExplanation(unittest.TestCase):
         self.assertIn("候補手上位との差: +155", prompt)
         self.assertIn("3. 推測として考えられる悪化理由", prompt)
         self.assertIn("5. 不足情報と注意点", prompt)
+        self.assertIn("最善手: 2g2f（▲２六歩）", prompt)
+        self.assertIn("候補手: 2g2f（▲２六歩）(+35)", prompt)
+        self.assertIn("定跡候補: 7g7f（▲７六歩）", prompt)
 
     def test_build_materials_adds_eval_delta_and_candidate_gap(self):
         materials = build_position_explanation_materials(

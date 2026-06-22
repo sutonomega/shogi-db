@@ -3,7 +3,10 @@
 """
 
 from __future__ import annotations
-
+from .japanese_move import (
+    format_usi_move_with_japanese,
+    format_usi_pv_with_japanese,
+)
 
 def build_opening_comparison_materials(
     position: dict,
@@ -27,9 +30,9 @@ def build_opening_comparison_materials(
 def build_opening_comparison_prompt(materials: dict) -> str:
     missing = materials.get("missing", [])
     missing_text = "なし" if not missing else "、".join(missing)
-    frequencies_text = _format_moves(materials.get("move_frequencies", []))
-    engine_candidates_text = _format_moves(materials.get("engine_candidates", []))
-    openings_text = _format_openings_by_source(materials.get("openings_by_source", {}))
+    frequencies_text = _format_moves(materials.get("move_frequencies", []),materials,)
+    engine_candidates_text = _format_moves(materials.get("engine_candidates", []),materials,)
+    openings_text = _format_openings_by_source(materials.get("openings_by_source", {}),materials,)
 
     return "\n".join(
         [
@@ -46,8 +49,8 @@ def build_opening_comparison_prompt(materials: dict) -> str:
             "確定情報:",
             f"- SFEN: {materials['sfen']}",
             f"- 手数: {materials['move_number']}",
-            f"- エンジン最善手: {_format_nullable(materials.get('best_move'))}",
-            f"- エンジン読み筋: {_format_nullable(materials.get('pv'))}",
+            f"- エンジン最善手: {_format_move(materials, materials.get('best_move'))}",
+            f"- エンジン読み筋: {_format_pv(materials)}",
             f"- 自分の実戦頻度手: {frequencies_text}",
             f"- source別定跡候補: {openings_text}",
             f"- エンジン候補手: {engine_candidates_text}",
@@ -62,6 +65,32 @@ def build_opening_comparison_prompt(materials: dict) -> str:
         ]
     )
 
+
+def _format_move(materials: dict, move: str | None) -> str:
+    if not move:
+        return "なし"
+
+    try:
+        return format_usi_move_with_japanese(
+            materials["sfen"],
+            move,
+        )
+    except Exception:
+        return move
+
+
+def _format_pv(materials: dict) -> str:
+    pv = materials.get("pv")
+    if not pv:
+        return "なし"
+
+    try:
+        return format_usi_pv_with_japanese(
+            materials["sfen"],
+            pv,
+        )
+    except Exception:
+        return pv
 
 def _missing_fields(materials: dict) -> list[str]:
     missing = []
@@ -87,9 +116,10 @@ def _format_eval(value: int | None) -> str:
     return f"{value:+d}"
 
 
-def _format_moves(moves: list[dict]) -> str:
+def _format_moves(moves: list[dict], materials: dict) -> str:
     if not moves:
         return "なし"
+
     parts = []
     for move in moves:
         details = []
@@ -97,16 +127,27 @@ def _format_moves(moves: list[dict]) -> str:
             details.append(f"出現{move.get('count', 0)}回")
         if "ratio" in move and move.get("ratio") is not None:
             details.append(f"割合{move['ratio']:.1%}")
+
         eval_value = move.get("avg_eval", move.get("eval"))
         details.append(f"評価値{_format_eval(eval_value)}")
-        parts.append(f"{move.get('move', '不明')}({'、'.join(details)})")
+
+        move_text = _format_move(
+            materials,
+            move.get("move"),
+        )
+        parts.append(f"{move_text}({'、'.join(details)})")
+
     return "、".join(parts)
 
 
-def _format_openings_by_source(openings_by_source: dict[str, list[dict]]) -> str:
+def _format_openings_by_source(
+    openings_by_source: dict[str, list[dict]],
+    materials: dict,
+) -> str:
     if not openings_by_source:
         return "なし"
+
     return " / ".join(
-        f"{source}: {_format_moves(openings)}"
+        f"{source}: {_format_moves(openings, materials)}"
         for source, openings in openings_by_source.items()
     )
