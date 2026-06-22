@@ -83,6 +83,18 @@ class TestGameRepository(unittest.TestCase):
         self.assertIsNone(stored.enclosure)
         self.assertEqual(stored.raw_kif, KIF_WITH_ANALYSIS)
 
+    def test_get_previous_position(self):
+        game_id = self.repository.save_game(self.game, self.positions)
+        positions = self.repository.list_positions(game_id)
+
+        previous = self.repository.get_previous_position(positions[2].id)
+        first_previous = self.repository.get_previous_position(positions[0].id)
+
+        self.assertIsNotNone(previous)
+        self.assertEqual(previous.id, positions[1].id)
+        self.assertEqual(previous.move_number, 1)
+        self.assertIsNone(first_previous)
+
     def test_schema_has_position_move_number_index(self):
         rows = self.repository.connection.execute(
             "PRAGMA index_list(positions)"

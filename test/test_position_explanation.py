@@ -2,6 +2,7 @@ import unittest
 
 from src.position_explanation import (
     PositionExplanationError,
+    build_position_explanation_materials,
     build_position_explanation_prompt,
     generate_position_explanation,
 )
@@ -12,10 +13,21 @@ class TestPositionExplanation(unittest.TestCase):
         prompt = build_position_explanation_prompt(
             {
                 "sfen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+                "previous_position": {
+                    "sfen": "before",
+                    "eval": 80,
+                },
                 "move_number": 1,
                 "move": "7g7f",
+                "eval_before": 80,
                 "eval": -120,
+                "eval_delta": -200,
+                "loss": 200,
+                "severity": "brief",
+                "explanation_policy": "200点以上500点未満の低下として、根拠に限定した簡易解説にする",
                 "best_move": "2g2f",
+                "top_candidate_eval": 35,
+                "top_candidate_eval_gap": 155,
                 "pv": "2g2f 8c8d",
                 "candidates": [{"move": "2g2f", "eval": 35}],
                 "openings": [{"move": "7g7f", "count": 3, "avg_eval": -20}],
@@ -27,8 +39,51 @@ class TestPositionExplanation(unittest.TestCase):
         self.assertIn("根拠に使った入力項目を明示する", prompt)
         self.assertIn("与えられていない読みや評価を創作しない", prompt)
         self.assertIn("確定情報:", prompt)
+        self.assertIn("直前SFEN: before", prompt)
+        self.assertIn("評価値変化: -200", prompt)
+        self.assertIn("損失: 200", prompt)
+        self.assertIn("候補手上位との差: +155", prompt)
         self.assertIn("3. 推測として考えられる悪化理由", prompt)
         self.assertIn("5. 不足情報と注意点", prompt)
+
+    def test_build_materials_adds_eval_delta_and_candidate_gap(self):
+        materials = build_position_explanation_materials(
+            {
+                "id": 2,
+                "move_number": 3,
+                "sfen": "after",
+                "move": "2g2f",
+                "eval": -120,
+                "best_move": "7g7f",
+                "pv": "7g7f 3c3d",
+                "candidates": [{"move": "7g7f", "eval": 70}],
+                "analyzed_at": None,
+                "engine_name": None,
+                "engine_depth": None,
+            },
+            [],
+            {
+                "id": 1,
+                "move_number": 2,
+                "sfen": "before",
+                "move": "3c3d",
+                "eval": 80,
+                "best_move": None,
+                "pv": None,
+                "candidates": [],
+                "analyzed_at": None,
+                "engine_name": None,
+                "engine_depth": None,
+            },
+        )
+
+        self.assertEqual(materials["eval_before"], 80)
+        self.assertEqual(materials["eval_delta"], -200)
+        self.assertEqual(materials["loss"], 200)
+        self.assertEqual(materials["severity"], "brief")
+        self.assertEqual(materials["top_candidate_eval"], 70)
+        self.assertEqual(materials["top_candidate_eval_gap"], 190)
+        self.assertNotIn("直前局面", materials["missing"])
 
     def test_generate_position_explanation_uses_command_stdout(self):
         explanation = generate_position_explanation(

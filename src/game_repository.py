@@ -482,6 +482,37 @@ class GameRepository:
             engine_depth=int(row["engine_depth"]) if row["engine_depth"] is not None else None,
         )
 
+    def get_previous_position(self, position_id: int) -> StoredPosition | None:
+        row = self.connection.execute(
+            """
+            SELECT
+                previous.id, previous.move_number, previous.sfen, previous.move, previous.eval,
+                previous.best_move, previous.pv, previous.candidates,
+                previous.analyzed_at, previous.engine_name, previous.engine_depth
+            FROM positions AS current
+            JOIN positions AS previous
+              ON previous.game_id = current.game_id
+             AND previous.move_number = current.move_number - 1
+            WHERE current.id = ?
+            """,
+            (position_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return StoredPosition(
+            id=int(row["id"]),
+            move_number=int(row["move_number"]),
+            sfen=row["sfen"],
+            move=row["move"],
+            eval=row["eval"],
+            best_move=row["best_move"],
+            pv=row["pv"],
+            candidates=row["candidates"],
+            analyzed_at=row["analyzed_at"],
+            engine_name=row["engine_name"],
+            engine_depth=int(row["engine_depth"]) if row["engine_depth"] is not None else None,
+        )
+
     def update_position_analysis(
         self,
         position_id: int,
