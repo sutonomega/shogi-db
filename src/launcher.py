@@ -1,4 +1,6 @@
+import os
 import socket
+import subprocess
 import threading
 import time
 import webbrowser
@@ -19,9 +21,24 @@ def is_server_running():
         return False
 
 
+def is_wsl():
+    try:
+        return "microsoft" in os.uname().release.lower()
+    except AttributeError:
+        return False
+
+
 def open_browser(delay=0):
     if delay:
         time.sleep(delay)
+
+    if is_wsl():
+        subprocess.Popen(
+            ["cmd.exe", "/c", "start", "", URL],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
 
     webbrowser.open(URL)
 

@@ -10,6 +10,7 @@ import mimetypes
 import os
 import threading
 import uuid
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -18,6 +19,14 @@ from .api import ApiError, ShogiDbApi
 from .kif_encoding import KifEncodingError
 from .game_repository import GameRepository
 
+def app_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent.parent
+
+
+def frontend_root() -> Path:
+    return app_root() / "frontend"
 
 class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     api: ShogiDbApi
