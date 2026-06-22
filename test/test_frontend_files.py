@@ -42,6 +42,12 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn('id="openingDirectoryImportButton"', content)
         self.assertIn('id="openingCancelDirectoryImportButton"', content)
         self.assertIn('aria-label="定跡登録"', content)
+        self.assertIn('id="settingsButton"', content)
+        self.assertIn('id="settingsPanel"', content)
+        self.assertIn('id="boardThemeSelect"', content)
+        self.assertIn('id="pieceThemeSelect"', content)
+        self.assertIn('value="hitomoji_wood"', content)
+        self.assertIn('value="futamoji"', content)
         self.assertIn('id="viewerView"', content)
         self.assertIn('id="boardGrid"', content)
         self.assertIn('id="evalGraph"', content)
@@ -114,6 +120,15 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn("formatPercent", content)
         self.assertIn("parseSfen", content)
         self.assertIn("renderBoard", content)
+        self.assertIn("displaySettingsStorageKey", content)
+        self.assertIn("loadDisplaySettings", content)
+        self.assertIn("saveDisplaySettings", content)
+        self.assertIn("toggleSettingsPanel", content)
+        self.assertIn("boardThemeSelect.addEventListener", content)
+        self.assertIn("pieceThemeSelect.addEventListener", content)
+        self.assertIn("pieceImagePath", content)
+        self.assertIn("/assets/shogi/boards/light_458x500.png", content)
+        self.assertIn("/assets/shogi/pieces/${state.displaySettings.pieceTheme}", content)
         self.assertIn("currentMoveInfo", content)
         self.assertIn("moveInfoForPosition", content)
         self.assertIn("moveLabelForCandidate", content)
@@ -197,6 +212,9 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn(".import-form", content)
         self.assertIn(".directory-import-form", content)
         self.assertIn(".registration-controls", content)
+        self.assertIn(".settings-button", content)
+        self.assertIn(".settings-panel", content)
+        self.assertIn(".settings-controls", content)
         self.assertIn("[hidden]", content)
         self.assertIn(".checkbox-field", content)
         self.assertIn(".file-picker", content)
@@ -212,6 +230,8 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn(".board-grid", content)
         self.assertIn(".square.move-from", content)
         self.assertIn(".square.move-to", content)
+        self.assertIn(".piece-image", content)
+        self.assertIn("background-size: 100% 100%", content)
         self.assertIn(".eval-graph", content)
         self.assertIn(".move-frequency-panel", content)
         self.assertIn(".move-frequency-list", content)
@@ -236,8 +256,33 @@ class TestFrontendFiles(unittest.TestCase):
         self.assertIn(".eval-point.current", content)
         self.assertIn(".eval-point:hover", content)
         self.assertIn(".move-slider", content)
-        self.assertIn("aspect-ratio: 1", content)
+        self.assertIn("aspect-ratio: 458 / 500", content)
         self.assertIn("@media (max-width: 640px)", content)
+
+    def test_shogi_image_assets_are_available(self):
+        board_dir = ROOT / "frontend" / "assets" / "shogi" / "boards"
+        piece_dir = ROOT / "frontend" / "assets" / "shogi" / "pieces"
+
+        for filename in [
+            "light_458x500.png",
+            "warm_458x500.png",
+            "resin_458x500.png",
+            "dark_458x500.png",
+        ]:
+            self.assertTrue((board_dir / filename).is_file())
+
+        for theme in [
+            "hitomoji",
+            "hitomoji_wood",
+            "hitomoji_gothic",
+            "hitomoji_dark",
+            "hitomoji_gothic_dark",
+            "futamoji",
+        ]:
+            theme_dir = piece_dir / theme
+            self.assertTrue((theme_dir / "black_pawn.png").is_file())
+            self.assertTrue((theme_dir / "white_king.png").is_file())
+            self.assertTrue((theme_dir / "black_dragon.png").is_file())
 
 
 if __name__ == "__main__":

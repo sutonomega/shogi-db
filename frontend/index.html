@@ -17,6 +17,9 @@
         <button class="icon-button" id="refreshButton" type="button" aria-label="再読み込み" title="再読み込み">
           ↻
         </button>
+        <button class="settings-button" id="settingsButton" type="button" aria-expanded="false">
+          設定
+        </button>
       </header>
 
       <section class="toolbar" id="listToolbar" aria-label="対局一覧の操作">
@@ -28,6 +31,35 @@
       </section>
 
       <section class="status-panel" id="statusPanel" hidden></section>
+
+      <section class="settings-panel" id="settingsPanel" aria-label="表示設定" hidden>
+        <div class="panel-heading">
+          <h2>表示設定</h2>
+          <span>盤面と駒の見た目</span>
+        </div>
+        <div class="settings-controls">
+          <label>
+            <span>盤面</span>
+            <select id="boardThemeSelect">
+              <option value="light">ライト</option>
+              <option value="warm">ウォーム</option>
+              <option value="resin">レジン</option>
+              <option value="dark">ダーク</option>
+            </select>
+          </label>
+          <label>
+            <span>駒</span>
+            <select id="pieceThemeSelect">
+              <option value="hitomoji">一文字</option>
+              <option value="hitomoji_wood">一文字 木目</option>
+              <option value="hitomoji_gothic">一文字 ゴシック</option>
+              <option value="hitomoji_dark">一文字 ダーク</option>
+              <option value="hitomoji_gothic_dark">一文字 ゴシックダーク</option>
+              <option value="futamoji">二文字</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
       <section class="management-panel" id="gameRegistrationPanel" aria-label="棋譜登録">
         <div class="panel-heading">

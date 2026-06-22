@@ -63,12 +63,23 @@
 
 | 項目       | 仕様                                    |
 | ---------- | --------------------------------------- |
-| 描画方式   | SVG または Canvas                       |
+| 描画方式   | HTML/CSS。盤面背景と駒は画像テーマを設定で切り替える |
 | SFEN 入力  | `positions[moveNumber].sfen`            |
 | 向き       | 先手（下）・後手（上）固定              |
 | 持ち駒     | 盤面の上下に表示                        |
 | ハイライト | 直前の指し手（from / to）を色付きで強調 |
 | 最善手表示 | Phase 2 以降: 矢印オーバーレイ（任意）  |
+
+### 表示設定
+
+ビューア上部の設定ボタンから、盤面画像テーマと駒画像テーマを選択できる。設定はブラウザの `localStorage` に保存し、次回表示時にも反映する。駒画像が読み込めない場合は従来の文字表示にフォールバックする。
+
+初期テーマ:
+
+| 種別 | テーマ |
+| ---- | ------ |
+| 盤面 | light / warm / resin / dark |
+| 駒   | hitomoji / hitomoji_wood / hitomoji_gothic / hitomoji_dark / hitomoji_gothic_dark / futamoji |
 
 ### 評価値グラフ（EvalGraph）
 
