@@ -583,8 +583,6 @@ input {
   place-items: center;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid rgba(47, 42, 36, 0.85);
-  border-bottom: 1px solid rgba(47, 42, 36, 0.85);
   color: #1f2933;
   font-size: clamp(18px, 5.6vw, 30px);
   font-weight: 600;
@@ -612,14 +610,6 @@ input {
   border-radius: 4px;
   content: "";
   pointer-events: none;
-}
-
-.square:nth-child(9n) {
-  border-right: 0;
-}
-
-.square:nth-last-child(-n + 9) {
-  border-bottom: 0;
 }
 
 .piece {
