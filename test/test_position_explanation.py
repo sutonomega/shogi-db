@@ -1,4 +1,5 @@
 import unittest
+import sys
 
 from src.position_explanation import (
     PositionExplanationError,
@@ -88,8 +89,7 @@ class TestPositionExplanation(unittest.TestCase):
     def test_generate_position_explanation_uses_command_stdout(self):
         explanation = generate_position_explanation(
             "局面データ",
-            llm_command="python3 -c \"import sys; print('解説:' + sys.stdin.read())\"",
-            timeout=5,
+            llm_command=(f'"{sys.executable}" -X utf8 -c '"\"import sys; print('解説:' + sys.stdin.read())\""),
         )
 
         self.assertEqual(explanation, "解説:局面データ")
@@ -98,7 +98,7 @@ class TestPositionExplanation(unittest.TestCase):
         with self.assertRaisesRegex(PositionExplanationError, "empty output"):
             generate_position_explanation(
                 "局面データ",
-                llm_command="python3 -c \"print('')\"",
+                llm_command=(f'"{sys.executable}" -X utf8 -c '"\"print('')\""),
                 timeout=5,
             )
 
@@ -106,7 +106,7 @@ class TestPositionExplanation(unittest.TestCase):
         with self.assertRaisesRegex(PositionExplanationError, "失敗"):
             generate_position_explanation(
                 "局面データ",
-                llm_command="python3 -c \"import sys; sys.stderr.write('失敗'); sys.exit(2)\"",
+                llm_command=(f'"{sys.executable}" -X utf8 -c '"\"import sys; sys.stderr.write('失敗'); sys.exit(2)\""),
                 timeout=5,
             )
 

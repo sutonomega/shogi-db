@@ -5,7 +5,7 @@ Application API operations for importing and reading games.
 import json
 import os
 from pathlib import Path
-
+from .settings import load_settings
 from .blunder_explanation import (
     build_blunder_explanation_materials,
     build_blunder_explanation_prompt,
@@ -268,7 +268,11 @@ class ShogiDbApi:
         llm_command: str | None = None,
         timeout: float = 60.0,
     ) -> dict:
-        resolved_command = llm_command or os.environ.get("SHOGI_DB_LLM_COMMAND")
+        settings = load_settings()
+        resolved_command = (
+            llm_command
+            or settings.llm_command
+        )
         if not resolved_command:
             raise ApiError("LLM command is required", 400)
 
@@ -448,7 +452,11 @@ class ShogiDbApi:
         llm_command: str | None = None,
         timeout: float = 60.0,
     ) -> dict:
-        resolved_command = llm_command or os.environ.get("SHOGI_DB_LLM_COMMAND")
+        settings = load_settings()
+        resolved_command = (
+            llm_command
+            or settings.llm_command
+        )
         if not resolved_command:
             raise ApiError("LLM command is required", 400)
 
@@ -521,7 +529,11 @@ class ShogiDbApi:
         if position is None:
             raise ApiError(f"Position not found: {position_id}", 404)
 
-        resolved_engine_path = engine_path or os.environ.get("SUISHO_ENGINE_PATH")
+        settings = load_settings()
+        resolved_engine_path = (
+            engine_path
+            or settings.suisho_engine_path
+        )
         if not resolved_engine_path:
             raise ApiError("Engine path is required", 400)
 
@@ -570,7 +582,11 @@ class ShogiDbApi:
         if position is None:
             raise ApiError(f"Position not found: {position_id}", 404)
 
-        resolved_command = llm_command or os.environ.get("SHOGI_DB_LLM_COMMAND")
+        settings = load_settings()
+        resolved_command = (
+            llm_command
+            or settings.llm_command
+        )
         if not resolved_command:
             raise ApiError("LLM command is required", 400)
 

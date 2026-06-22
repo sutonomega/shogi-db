@@ -7,16 +7,27 @@ the MVP endpoints without introducing framework setup yet.
 
 import json
 import mimetypes
+import os
 import threading
 import uuid
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-
+from .settings import AppSettings, load_settings, save_settings, settings_path
 from .api import ApiError, ShogiDbApi
 from .kif_encoding import KifEncodingError
 from .game_repository import GameRepository
+from tempfile import TemporaryDirectory
 
+def app_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent.parent
+
+
+def frontend_root() -> Path:
+    return app_root() / "frontend"
 
 class ShogiDbRequestHandler(BaseHTTPRequestHandler):
     api: ShogiDbApi
@@ -34,6 +45,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
 
         try:
             parts = path.strip("/").split("/")
+            if path == "/api/settings":
+                self._send_json(self._save_settings_from_request(), 200)
+                return
+
             if (
                 len(parts) == 4
                 and parts[0] == "api"
@@ -131,6 +146,10 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
         path = parsed_url.path
 
         try:
+            if path == "/api/settings":
+                self._send_json(load_settings_payload(), 200)
+                return
+
             if path == "/" or path.startswith("/assets/") or self._is_frontend_route(path):
                 self._send_static(path)
                 return
@@ -256,6 +275,11 @@ class ShogiDbRequestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         return
+
+    def _save_settings_from_request(self) -> dict:
+        raw_body = self._read_body()
+        payload = _decode_json_payload(raw_body)
+        return save_settings_payload(payload)
 
     def _import_game_from_request(self) -> dict:
         raw_body = self._read_body()
@@ -432,6 +456,7 @@ def create_server(
     Handler.opening_import_jobs = OpeningDirectoryImportJobStore(api)
     Handler.opening_rebuild_jobs = OpeningRebuildJobStore(api)
     Handler.static_root = root
+    Handler.repository = repository
     return ThreadingHTTPServer((host, port), Handler)
 
 
@@ -473,6 +498,7 @@ def is_import_post_path(path: str) -> bool:
     if path in (
         "/api/games/import",
         "/api/games/import-directory",
+        "/api/settings",
         "/api/blunders/explain",
         "/api/openings/import",
         "/api/openings/import-directory",
@@ -839,6 +865,102 @@ class OpeningRebuildJobStore:
             return bool(self._jobs[job_id]["cancel_requested"])
 
 
+BOARD_THEMES = {"light", "warm", "resin", "dark"}
+
+PIECE_THEMES = {
+    "hitomoji",
+    "hitomoji_wood",
+    "hitomoji_gothic",
+    "hitomoji_dark",
+    "hitomoji_gothic_dark",
+    "futamoji",
+}
+
+DEFAULT_SETTINGS = {
+    "suisho_engine_path": "",
+    "llm_command": "",
+    "board_theme": "light",
+    "piece_theme": "hitomoji",
+}
+
+def load_settings_payload() -> dict:
+    settings = load_settings()
+    return {
+        "suisho_engine_path": settings.suisho_engine_path,
+        "llm_command": settings.llm_command,
+        "board_theme": settings.board_theme,
+        "piece_theme": settings.piece_theme,
+        "settings_path": str(settings_path()),
+    }
+
+
+def save_settings_payload(payload: dict) -> dict:
+    payload = _normalize_settings_payload(payload,allow_partial=True,)
+    current = load_settings()
+    settings = AppSettings(
+        suisho_engine_path=payload.get( "suisho_engine_path",current.suisho_engine_path,),
+        llm_command=payload.get("llm_command",current.llm_command,),
+        board_theme=payload.get("board_theme",current.board_theme,),
+        piece_theme=payload.get("piece_theme",current.piece_theme,),
+    )
+    saved = save_settings(settings)
+
+    return {
+        "suisho_engine_path": saved.suisho_engine_path,
+        "llm_command": saved.llm_command,
+        "board_theme": saved.board_theme,
+        "piece_theme": saved.piece_theme,
+        "settings_path": str(settings_path()),
+    }
+
+def _normalize_settings_payload(payload: dict, allow_partial: bool = False) -> dict:
+    if not isinstance(payload, dict):
+        raise ApiError("Settings payload must be an object", 400)
+
+    allowed_keys = set(DEFAULT_SETTINGS)
+    unknown_keys = set(payload) - allowed_keys
+    if unknown_keys:
+        keys = ", ".join(sorted(unknown_keys))
+        raise ApiError(f"Unknown settings field: {keys}", 400)
+
+    normalized = {}
+    required_keys = set() if allow_partial else allowed_keys
+    missing_keys = required_keys - set(payload)
+    if missing_keys:
+        keys = ", ".join(sorted(missing_keys))
+        raise ApiError(f"Missing settings field: {keys}", 400)
+
+    if "suisho_engine_path" in payload:
+        value = payload["suisho_engine_path"]
+        if not isinstance(value, str):
+            raise ApiError("Settings field suisho_engine_path must be string", 400)
+        normalized["suisho_engine_path"] = value
+
+    if "llm_command" in payload:
+        value = payload["llm_command"]
+        if not isinstance(value, str):
+            raise ApiError("Settings field llm_command must be string", 400)
+        normalized["llm_command"] = value
+
+    if "board_theme" in payload:
+        value = payload["board_theme"]
+        if not isinstance(value, str):
+            raise ApiError("Settings field board_theme must be string", 400)
+        if value not in BOARD_THEMES:
+            raise ApiError("Settings field board_theme is invalid", 400)
+        normalized["board_theme"] = value
+
+    if "piece_theme" in payload:
+        value = payload["piece_theme"]
+        if not isinstance(value, str):
+            raise ApiError("Settings field piece_theme must be string", 400)
+        if value not in PIECE_THEMES:
+            raise ApiError("Settings field piece_theme is invalid", 400)
+        normalized["piece_theme"] = value
+
+    return normalized
+
+
 def import_directory_payload(api: ShogiDbApi, payload: dict) -> dict:
     directory_path = payload.get("path")
     recursive = payload.get("recursive", False)
@@ -925,9 +1047,15 @@ def _parse_sources(value: str) -> list[str]:
     return [source.strip() for source in value.split(",") if source.strip()]
 
 
-if __name__ == "__main__":
+def main():
     server = create_server()
+
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         server.server_close()
+
+
+if __name__ == "__main__":
+    main()

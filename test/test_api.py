@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from src.api import ApiError, ShogiDbApi
 from src.game_repository import GameRepository, OpeningAggregate
+from src.settings import AppSettings
 from src.usi_engine import EngineAnalysis
 
 
@@ -329,7 +330,10 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertIn("too small", str(context.exception))
         generate.assert_not_called()
 
-    def test_explain_blunder_requires_llm_command(self):
+    @patch("src.api.load_settings")
+    def test_explain_blunder_requires_llm_command(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
         game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
 
         with self.assertRaises(ApiError) as context:
@@ -504,7 +508,10 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["explanation"], "7六歩と定跡候補を比較しました。")
         generate.assert_called_once()
 
-    def test_explain_opening_comparison_requires_llm_command(self):
+    @patch("src.api.load_settings")
+    def test_explain_opening_comparison_requires_llm_command(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
         game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
         position = self.repository.list_positions(game_id)[0]
 
@@ -573,7 +580,10 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(position["engine_depth"], 10)
         self.assertIsNotNone(position["analyzed_at"])
 
-    def test_analyze_position_requires_engine_path(self):
+    @patch("src.api.load_settings")
+    def test_analyze_position_requires_engine_path(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
         game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
         position_id = self.repository.list_positions(game_id)[0].id
 
@@ -650,7 +660,10 @@ class TestShogiDbApi(unittest.TestCase):
         self.assertEqual(response["explanation"], "7六歩は自然な初手です。")
         generate.assert_called_once()
 
-    def test_explain_position_requires_llm_command(self):
+    @patch("src.api.load_settings")
+    def test_explain_position_requires_llm_command(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
         game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
         position_id = self.repository.list_positions(game_id)[0].id
 

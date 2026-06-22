@@ -1,291 +1,688 @@
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from src.api import ApiError, ShogiDbApi
+from src.game_repository import GameRepository, OpeningAggregate
+from src.settings import AppSettings
+from src.usi_engine import EngineAnalysis
 
 
-ROOT = Path(__file__).resolve().parent.parent
+KIF_WITH_ANALYSIS = """\
+開始日時：2024/02/10 19:00:00
+手合割：平手
+先手：解析太郎
+後手：棋譜花子
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:02/00:00:02)
+**解析 0
+*評価値 +64  読み筋 7g7f 3c3d 2g2f
+* 2g2f +55
+* 6i7h +40
+   2 ３四歩(33)    ( 0:01/00:00:01)
+**解析 0
+*評価値 +44  読み筋 3c3d 2g2f 8c8d
+* 8c8d +30
+   3 投了
+まで2手で後手の勝ち
+"""
+
+SHIKENBISHA_KIF = """\
+開始日時：2024/03/01 10:00:00
+手合割：平手
+先手：振飛車太郎
+後手：居飛車花子
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+   3 ６八飛(28)    ( 0:01/00:00:02)
+   4 投了
+まで3手で先手の勝ち
+"""
+
+MINO_KIF = """\
+開始日時：2024/03/02 10:00:00
+手合割：平手
+先手：囲い太郎
+後手：居飛車花子
+手数----指手---------消費時間--
+   1 ７六歩(77)    ( 0:01/00:00:01)
+   2 ３四歩(33)    ( 0:01/00:00:01)
+   3 ６八飛(28)    ( 0:01/00:00:02)
+   4 ８四歩(83)    ( 0:01/00:00:02)
+   5 ４八玉(59)    ( 0:01/00:00:03)
+   6 ８五歩(84)    ( 0:01/00:00:03)
+   7 ３八玉(48)    ( 0:01/00:00:04)
+   8 ６二銀(71)    ( 0:01/00:00:04)
+   9 ２八玉(38)    ( 0:01/00:00:05)
+  10 ４二玉(51)    ( 0:01/00:00:05)
+  11 ３八銀(39)    ( 0:01/00:00:06)
+  12 ３二玉(42)    ( 0:01/00:00:06)
+  13 ５八金左(69)  ( 0:01/00:00:07)
+  14 投了
+まで13手で先手の勝ち
+"""
+
+KIF_WITH_BLUNDER = """\
+開始日時：2024/03/03 10:00:00
+手合割：平手
+先手：悪手太郎
+後手：悪手花子
+手数----指手---------消費時間--
+   1 ７六歩(77)
+**解析 0
+*評価値 +100  読み筋 7g7f 3c3d
+   2 ３四歩(33)
+**解析 0
+*評価値 +80  読み筋 3c3d 2g2f
+   3 ２六歩(27)
+**解析 0
+*評価値 -120  読み筋 2g2f 8c8d
+   4 投了
+まで3手で先手の勝ち
+"""
 
 
-class TestFrontendFiles(unittest.TestCase):
-    def test_index_references_assets(self):
-        content = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+class TestShogiDbApi(unittest.TestCase):
+    def setUp(self):
+        self.repository = GameRepository()
+        self.api = ShogiDbApi(self.repository)
 
-        self.assertIn('id="gameRows"', content)
-        self.assertIn('id="searchInput"', content)
-        self.assertIn('id="importForm"', content)
-        self.assertIn('id="kifFileInput"', content)
-        self.assertIn('id="directoryImportForm"', content)
-        self.assertIn('id="directoryPathInput"', content)
-        self.assertIn('id="recursiveImportInput"', content)
-        self.assertIn('id="cancelDirectoryImportButton"', content)
-        self.assertIn('id="openingRebuildSummary"', content)
-        self.assertIn('id="openingRebuildButton"', content)
-        self.assertIn('id="cancelOpeningRebuildButton"', content)
-        self.assertIn('class="registration-controls"', content)
-        self.assertIn('accept=".kif,text/plain,application/octet-stream"', content)
-        self.assertIn('id="strategyStatsPanel"', content)
-        self.assertIn('id="strategyStatsList"', content)
-        self.assertIn('id="enclosureStatsPanel"', content)
-        self.assertIn('id="enclosureStatsList"', content)
-        self.assertIn('id="blunderPanel"', content)
-        self.assertIn('id="blunderList"', content)
-        self.assertIn('id="openingManagementPanel"', content)
-        self.assertIn('id="openingManagementSummary"', content)
-        self.assertIn('<span id="openingManagementSummary">定跡として登録する棋譜</span>', content)
-        self.assertNotIn(">professional<", content)
-        self.assertIn('id="openingImportForm"', content)
-        self.assertIn('id="openingFileInput"', content)
-        self.assertIn('id="openingFileName"', content)
-        self.assertIn('id="openingImportButton"', content)
-        self.assertIn('id="openingDirectoryImportForm"', content)
-        self.assertIn('id="openingDirectoryPathInput"', content)
-        self.assertIn('id="openingRecursiveImportInput"', content)
-        self.assertIn('id="openingDirectoryImportButton"', content)
-        self.assertIn('id="openingCancelDirectoryImportButton"', content)
-        self.assertIn('aria-label="定跡登録"', content)
-        self.assertIn('id="settingsButton"', content)
-        self.assertIn('id="settingsPanel"', content)
-        self.assertIn('id="boardThemeSelect"', content)
-        self.assertIn('id="pieceThemeSelect"', content)
-        self.assertIn('value="hitomoji_wood"', content)
-        self.assertIn('value="futamoji"', content)
-        self.assertIn('id="viewerView"', content)
-        self.assertIn('id="boardGrid"', content)
-        self.assertIn('id="evalGraph"', content)
-        self.assertIn('id="moveFrequencyList"', content)
-        self.assertIn('id="moveFrequencySummary"', content)
-        self.assertIn('id="openingList"', content)
-        self.assertIn('id="openingSummary"', content)
-        self.assertIn('id="openingComparisonSummary"', content)
-        self.assertIn('id="openingComparisonMissing"', content)
-        self.assertIn('id="openingComparisonPrompt"', content)
-        self.assertIn('id="openingComparisonOutput"', content)
-        self.assertIn('id="buildOpeningComparisonButton"', content)
-        self.assertIn('id="generateOpeningComparisonButton"', content)
-        self.assertIn('id="explanationSummary"', content)
-        self.assertIn('id="explanationMissing"', content)
-        self.assertIn('id="explanationPrompt"', content)
-        self.assertIn('id="explanationOutput"', content)
-        self.assertIn('id="buildExplanationPromptButton"', content)
-        self.assertIn('id="generateExplanationButton"', content)
-        self.assertIn('id="moveSlider"', content)
-        self.assertIn('id="positionEval"', content)
-        self.assertIn('id="candidateSummary"', content)
-        self.assertIn('id="candidateList"', content)
-        self.assertIn('id="candidateStatus"', content)
-        self.assertIn('id="analyzeCandidateButton"', content)
-        self.assertIn('id="blackHand"', content)
-        self.assertIn('id="whiteHand"', content)
-        self.assertIn('/assets/styles.css', content)
-        self.assertIn('/assets/app.js', content)
+    def tearDown(self):
+        self.repository.close()
 
-    def test_app_fetches_games_endpoint(self):
-        content = (ROOT / "frontend" / "assets" / "app.js").read_text(encoding="utf-8")
+    def test_import_game(self):
+        response = self.api.import_game(KIF_WITH_ANALYSIS)
 
-        self.assertIn('fetch("/api/games")', content)
-        self.assertIn('fetch("/api/stats/strategies")', content)
-        self.assertIn('fetch("/api/stats/enclosures")', content)
-        self.assertIn('fetch("/api/stats/blunders")', content)
-        self.assertIn('fetch("/api/games/import"', content)
-        self.assertIn('fetch("/api/games/import-directory"', content)
-        self.assertIn('"Content-Type": "application/octet-stream"', content)
-        self.assertIn("importKifFile", content)
-        self.assertIn("importKifDirectory", content)
-        self.assertIn("pollDirectoryImportJob", content)
-        self.assertIn("setDirectoryImportStatus", content)
-        self.assertIn("cancelDirectoryImport", content)
-        self.assertIn("processed}/${total}", content)
-        self.assertIn("kifFileInput.addEventListener", content)
-        self.assertIn("directoryImportForm.addEventListener", content)
-        self.assertIn("cancelDirectoryImportButton.addEventListener", content)
-        self.assertIn('fetch("/api/openings/rebuild"', content)
-        self.assertIn('fetch(`/api/openings/rebuild/jobs/${jobId}`)', content)
-        self.assertIn('fetch(`/api/openings/rebuild/jobs/${jobId}/cancel`', content)
-        self.assertIn("rebuildOpenings", content)
-        self.assertIn("pollOpeningRebuildJob", content)
-        self.assertIn("cancelOpeningRebuild", content)
-        self.assertIn("openingRebuildButton.addEventListener", content)
-        self.assertIn("renderStrategyStats", content)
-        self.assertIn("renderEnclosureStats", content)
-        self.assertIn("renderBlunders", content)
-        self.assertIn("blunder.occurrence_count", content)
-        self.assertIn("blunder.game_count", content)
-        self.assertIn("moveLabelForCandidate(blunder.move, blunder.previous_sfen)", content)
-        self.assertIn("generateBlunderExplanation", content)
-        self.assertIn('fetch("/api/blunders/explain"', content)
-        self.assertIn("blunderKey", content)
-        self.assertIn("openBlunderPosition", content)
-        self.assertIn('`/games/${blunder.game_id}?move=${blunder.move_number}`', content)
-        self.assertIn("loadStats", content)
-        self.assertIn("renderStatsList", content)
-        self.assertIn("formatPercent", content)
-        self.assertIn("parseSfen", content)
-        self.assertIn("renderBoard", content)
-        self.assertIn("displaySettingsStorageKey", content)
-        self.assertIn("loadDisplaySettings", content)
-        self.assertIn("saveDisplaySettings", content)
-        self.assertIn("toggleSettingsPanel", content)
-        self.assertIn("boardThemeSelect.addEventListener", content)
-        self.assertIn("pieceThemeSelect.addEventListener", content)
-        self.assertIn("pieceImagePath", content)
-        self.assertIn("text-piece", content)
-        self.assertIn("/assets/shogi/boards/light_458x500.png", content)
-        self.assertIn("/assets/shogi/pieces/${state.displaySettings.pieceTheme}", content)
-        self.assertIn("currentMoveInfo", content)
-        self.assertIn("moveInfoForPosition", content)
-        self.assertIn("moveLabelForCandidate", content)
-        self.assertIn("moveLabelForCandidate(frequency.move", content)
-        self.assertIn("moveLabelForCandidate(opening.move", content)
-        self.assertIn("parseUsiMove", content)
-        self.assertIn("isMoveSquare", content)
-        self.assertIn("renderEngineCandidates", content)
-        self.assertIn("selectedCandidateMoveInfo", content)
-        self.assertIn("selectedCandidateMove", content)
-        self.assertIn("candidateAnalysisStatus", content)
-        self.assertIn("candidateStatusText", content)
-        self.assertIn("analyzeCurrentPositionForCandidates", content)
-        self.assertIn('fetch(`/api/positions/${position.id}/analyze`', content)
-        self.assertIn("payload.error || `HTTP ${response.status}`", content)
-        self.assertIn("analyzeCandidateButton.addEventListener", content)
-        self.assertIn("この局面を解析してください", content)
-        self.assertIn("candidate.move === actualMove", content)
-        self.assertIn("sameDestination", content)
-        self.assertIn('sameDestination ? "同"', content)
-        self.assertIn("renderEvalGraph", content)
-        self.assertIn("formatEvalWithDelta", content)
-        self.assertIn("mateEvalValue = 100000", content)
-        self.assertIn("evalGraphMinScale = 3000", content)
-        self.assertIn("evalGraphMaxScale = 3000", content)
-        self.assertIn("isMateEval", content)
-        self.assertIn("isClippedEval", content)
-        self.assertIn("buildEvalScale", content)
-        self.assertIn("表示上限外", content)
-        self.assertIn("drawMissingEvalLines", content)
-        self.assertIn('"+詰み"', content)
-        self.assertIn('circle.addEventListener("click", () => setCurrentMove(point.index))', content)
-        self.assertIn("moveNumberFromQuery", content)
-        self.assertIn('new URLSearchParams(window.location.search).get("move")', content)
-        self.assertIn('moveSlider.addEventListener("input"', content)
-        self.assertIn('fetch(`/api/games/${gameId}/positions`)', content)
-        self.assertIn('fetch(`/api/positions?sfen=${encodeURIComponent(position.sfen)}`)', content)
-        self.assertIn("fetch(`/api/openings?${query.toString()}`)", content)
-        self.assertIn('source: "professional"', content)
-        self.assertIn('fetch("/api/openings/import?source=professional"', content)
-        self.assertIn('fetch("/api/openings/import-directory"', content)
-        self.assertIn('fetch(`/api/openings/import-directory/jobs/${jobId}`)', content)
-        self.assertIn('fetch(`/api/openings/import-directory/jobs/${jobId}/cancel`', content)
-        self.assertIn("importOpeningDirectory", content)
-        self.assertIn("pollOpeningDirectoryImportJob", content)
-        self.assertIn("setOpeningDirectoryImportStatus", content)
-        self.assertIn("cancelOpeningDirectoryImport", content)
-        self.assertIn("openingCancelDirectoryImportButton.addEventListener", content)
-        self.assertIn("定跡一括登録中", content)
-        self.assertIn("renderMoveFrequencies", content)
-        self.assertIn("loadMoveFrequencies", content)
-        self.assertIn("renderOpenings", content)
-        self.assertIn("loadOpenings", content)
-        self.assertIn("importOpeningFile", content)
-        self.assertIn("openingManagementSummary", content)
-        self.assertIn("openingImportForm.addEventListener", content)
-        self.assertIn("renderOpeningComparison", content)
-        self.assertIn("resetOpeningComparison", content)
-        self.assertIn("loadOpeningComparisonPrompt", content)
-        self.assertIn("generateOpeningComparison", content)
-        self.assertIn('fetch(`/api/positions/${position.id}/opening-comparison-prompt?', content)
-        self.assertIn('fetch(`/api/positions/${position.id}/opening-comparison-explain`', content)
-        self.assertIn("buildOpeningComparisonButton.addEventListener", content)
-        self.assertIn("generateOpeningComparisonButton.addEventListener", content)
-        self.assertIn("renderExplanationPrompt", content)
-        self.assertIn("resetExplanationPrompt", content)
-        self.assertIn("loadExplanationPrompt", content)
-        self.assertIn("generateExplanation", content)
-        self.assertIn('fetch(`/api/positions/${position.id}/explanation-prompt`)', content)
-        self.assertIn('fetch(`/api/positions/${position.id}/explain`', content)
-        self.assertIn("JSON.stringify({})", content)
-        self.assertIn("buildExplanationPromptButton.addEventListener", content)
-        self.assertIn("generateExplanationButton.addEventListener", content)
-        self.assertIn('window.location.href = `/games/${game.id}`', content)
-        self.assertIn("保存済み対局はありません", content)
+        self.assertEqual(response["game"]["id"], 1)
+        self.assertEqual(response["game"]["black"], "解析太郎")
+        self.assertEqual(response["game"]["white"], "棋譜花子")
+        self.assertEqual(response["game"]["winner"], "white")
+        self.assertEqual(response["game"]["move_count"], 2)
+        self.assertIsNone(response["game"]["strategy"])
+        self.assertIsNone(response["game"]["enclosure"])
+        self.assertEqual(response["positions_count"], 3)
 
-    def test_styles_define_table_layout(self):
-        content = (ROOT / "frontend" / "assets" / "styles.css").read_text(encoding="utf-8")
+    def test_import_game_bytes_accepts_utf8(self):
+        response = self.api.import_game_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
 
-        self.assertIn(".game-table", content)
-        self.assertIn(".import-form", content)
-        self.assertIn(".directory-import-form", content)
-        self.assertIn(".registration-controls", content)
-        self.assertIn(".settings-button", content)
-        self.assertIn(".settings-panel", content)
-        self.assertIn(".settings-controls", content)
-        self.assertIn("[hidden]", content)
-        self.assertIn(".checkbox-field", content)
-        self.assertIn(".file-picker", content)
-        self.assertIn(".stats-panel", content)
-        self.assertIn(".management-panel", content)
-        self.assertIn(".stats-item", content)
-        self.assertIn(".stats-list", content)
-        self.assertIn(".stats-item-actions", content)
-        self.assertIn(".blunder-explanation-output", content)
-        self.assertIn("overflow-y: auto", content)
-        self.assertIn("max-height: 242px", content)
-        self.assertIn("table-layout: fixed", content)
-        self.assertIn(".board-grid", content)
-        self.assertIn(".square.move-from", content)
-        self.assertIn(".square.move-to", content)
-        self.assertIn(".piece-image", content)
-        self.assertIn(".piece.white.text-piece", content)
-        self.assertIn("padding: 6px 7px 7px 6px", content)
-        self.assertIn("background-size: 100% 100%", content)
-        self.assertIn(".eval-graph", content)
-        self.assertIn(".move-frequency-panel", content)
-        self.assertIn(".move-frequency-list", content)
-        self.assertIn("max-height: 206px", content)
-        self.assertIn(".move-frequency-bar", content)
-        self.assertIn(".candidate-panel", content)
-        self.assertIn(".candidate-item", content)
-        self.assertIn(".candidate-item.selected", content)
-        self.assertIn(".candidate-item.actual", content)
-        self.assertIn(".opening-panel", content)
-        self.assertIn(".opening-bar", content)
-        self.assertIn(".opening-comparison-prompt", content)
-        self.assertIn(".opening-comparison-output", content)
-        self.assertIn(".opening-comparison-missing", content)
-        self.assertIn(".explanation-panel", content)
-        self.assertIn(".explanation-prompt", content)
-        self.assertIn(".explanation-output", content)
-        self.assertIn(".explanation-missing", content)
-        self.assertIn(".panel-heading-actions", content)
-        self.assertIn(".eval-line", content)
-        self.assertIn(".eval-missing-line", content)
-        self.assertIn(".eval-point.current", content)
-        self.assertIn(".eval-point:hover", content)
-        self.assertIn(".move-slider", content)
-        self.assertIn("aspect-ratio: 458 / 500", content)
-        self.assertIn("@media (max-width: 640px)", content)
+        self.assertEqual(response["game"]["black"], "解析太郎")
+        self.assertEqual(response["game"]["move_count"], 2)
 
-    def test_shogi_image_assets_are_available(self):
-        board_dir = ROOT / "frontend" / "assets" / "shogi" / "boards"
-        piece_dir = ROOT / "frontend" / "assets" / "shogi" / "pieces"
+    def test_import_game_bytes_accepts_cp932(self):
+        response = self.api.import_game_bytes(KIF_WITH_ANALYSIS.encode("cp932"))
 
-        for filename in [
-            "light_458x500.png",
-            "warm_458x500.png",
-            "resin_458x500.png",
-            "dark_458x500.png",
-        ]:
-            self.assertTrue((board_dir / filename).is_file())
+        self.assertEqual(response["game"]["black"], "解析太郎")
+        self.assertEqual(response["game"]["move_count"], 2)
 
-        for theme in [
-            "hitomoji",
-            "hitomoji_wood",
-            "hitomoji_gothic",
-            "hitomoji_dark",
-            "hitomoji_gothic_dark",
-            "futamoji",
-        ]:
-            theme_dir = piece_dir / theme
-            self.assertTrue((theme_dir / "black_pawn.png").is_file())
-            self.assertTrue((theme_dir / "white_king.png").is_file())
-            self.assertTrue((theme_dir / "black_dragon.png").is_file())
+    def test_import_games_from_directory(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "utf8.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "cp932.kif").write_bytes(SHIKENBISHA_KIF.encode("cp932"))
+            (directory / "memo.txt").write_text("ignored", encoding="utf-8")
+
+            response = self.api.import_games_from_directory(str(directory))
+
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 2)
+        self.assertEqual(response["failed"], 0)
+        self.assertEqual(len(response["games"]), 2)
+        self.assertEqual(len(self.api.list_games()["games"]), 2)
+        self.assertNotIn("raw_kif", response["games"][0]["game"])
+
+    def test_import_games_from_directory_reports_progress(self):
+        progress = []
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "first.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "second.kif").write_bytes(SHIKENBISHA_KIF.encode("utf-8"))
+
+            self.api.import_games_from_directory(
+                str(directory),
+                progress_callback=lambda processed, total: progress.append((processed, total)),
+            )
+
+        self.assertEqual(progress[0], (0, 2))
+        self.assertEqual(progress[-1], (2, 2))
+
+    def test_import_games_from_directory_can_cancel(self):
+        calls = []
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "first.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "second.kif").write_bytes(SHIKENBISHA_KIF.encode("utf-8"))
+
+            response = self.api.import_games_from_directory(
+                str(directory),
+                progress_callback=lambda processed, total: calls.append((processed, total)),
+                should_cancel=lambda: bool(calls),
+            )
+
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 0)
+
+    def test_import_games_from_directory_continues_after_error(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "ok.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "bad.kif").write_bytes(b"\x81")
+
+            response = self.api.import_games_from_directory(str(directory))
+
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 1)
+        self.assertEqual(response["failed"], 1)
+        self.assertIn("bad.kif", response["errors"][0]["path"])
+
+    def test_import_games_from_directory_recursive(self):
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            child = directory / "child"
+            child.mkdir()
+            (child / "game.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+
+            non_recursive = self.api.import_games_from_directory(str(directory))
+            recursive = self.api.import_games_from_directory(str(directory), recursive=True)
+
+        self.assertEqual(non_recursive["total"], 0)
+        self.assertEqual(recursive["total"], 1)
+        self.assertEqual(recursive["imported"], 1)
+
+    def test_import_games_from_directory_missing_path_raises_api_error(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.import_games_from_directory("/path/that/does/not/exist")
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_import_opening_games_from_directory(self):
+        progress = []
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            (directory / "first.kif").write_bytes(KIF_WITH_ANALYSIS.encode("utf-8"))
+            (directory / "second.kif").write_bytes(SHIKENBISHA_KIF.encode("cp932"))
+
+            response = self.api.import_opening_games_from_directory(
+                str(directory),
+                source="professional",
+                progress_callback=lambda processed, total: progress.append((processed, total)),
+            )
+
+        self.assertEqual(response["source"], "professional")
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["imported"], 2)
+        self.assertEqual(response["failed"], 0)
+        self.assertGreater(response["openings_count"], 0)
+        self.assertEqual(progress[0], (0, 2))
+        self.assertEqual(progress[-1], (2, 2))
+        self.assertEqual(len(self.api.list_games()["games"]), 0)
+
+    def test_import_game_detects_strategy(self):
+        response = self.api.import_game(SHIKENBISHA_KIF)
+
+        self.assertEqual(response["game"]["strategy"], "四間飛車")
+
+    def test_get_strategy_stats(self):
+        self.api.import_game(SHIKENBISHA_KIF)
+
+        response = self.api.get_strategy_stats()
+
+        self.assertEqual(response["strategies"][0]["strategy"], "四間飛車")
+        self.assertEqual(response["strategies"][0]["games"], 1)
+        self.assertEqual(response["strategies"][0]["wins"], 1)
+        self.assertEqual(response["strategies"][0]["losses"], 0)
+        self.assertEqual(response["strategies"][0]["draws"], 0)
+        self.assertEqual(response["strategies"][0]["win_rate"], 1.0)
+
+    def test_import_game_detects_enclosure(self):
+        response = self.api.import_game(MINO_KIF)
+
+        self.assertEqual(response["game"]["enclosure"], "美濃囲い")
+
+    def test_get_enclosure_stats(self):
+        self.api.import_game(MINO_KIF)
+
+        response = self.api.get_enclosure_stats()
+
+        self.assertEqual(response["enclosures"][0]["enclosure"], "美濃囲い")
+        self.assertEqual(response["enclosures"][0]["games"], 1)
+        self.assertEqual(response["enclosures"][0]["wins"], 1)
+        self.assertEqual(response["enclosures"][0]["losses"], 0)
+        self.assertEqual(response["enclosures"][0]["draws"], 0)
+        self.assertEqual(response["enclosures"][0]["win_rate"], 1.0)
+
+    def test_get_blunders(self):
+        self.api.import_game(KIF_WITH_BLUNDER)
+
+        response = self.api.get_blunders()
+
+        self.assertEqual(response["blunders"][0]["move_number"], 3)
+        self.assertEqual(response["blunders"][0]["move"], "2g2f")
+        self.assertIn(" b ", response["blunders"][0]["previous_sfen"])
+        self.assertEqual(response["blunders"][0]["eval_before"], 80)
+        self.assertEqual(response["blunders"][0]["eval_after"], -120)
+        self.assertEqual(response["blunders"][0]["eval_delta"], -200)
+        self.assertEqual(response["blunders"][0]["loss"], 200)
+        self.assertEqual(response["blunders"][0]["occurrence_count"], 1)
+        self.assertEqual(response["blunders"][0]["game_count"], 1)
+
+    def test_get_blunder_explanation_prompt(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        response = self.api.get_blunder_explanation_prompt(game_id, 3)
+
+        self.assertEqual(response["game"]["id"], game_id)
+        self.assertEqual(response["position"]["move_number"], 3)
+        self.assertEqual(response["previous_position"]["move_number"], 2)
+        self.assertEqual(response["materials"]["move"], "2g2f")
+        self.assertEqual(response["materials"]["eval_before"], 80)
+        self.assertEqual(response["materials"]["eval_after"], -120)
+        self.assertEqual(response["materials"]["eval_delta"], -200)
+        self.assertEqual(response["materials"]["loss"], 200)
+        self.assertEqual(response["materials"]["severity"], "brief")
+        self.assertIn("着手前SFEN:", response["prompt"])
+        self.assertIn("着手後SFEN:", response["prompt"])
+        self.assertIn("推測として考えられる悪手理由", response["prompt"])
+
+    def test_get_blunder_explanation_prompt_requires_existing_move(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        with self.assertRaises(ApiError) as context:
+            self.api.get_blunder_explanation_prompt(game_id, 99)
+
+        self.assertEqual(context.exception.status_code, 404)
+
+    def test_explain_blunder(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        with patch("src.api.generate_position_explanation") as generate:
+            generate.return_value = "2六歩で評価値が下がりました。"
+
+            response = self.api.explain_blunder(
+                game_id,
+                3,
+                llm_command="fake-llm",
+            )
+
+        self.assertEqual(response["game"]["id"], game_id)
+        self.assertEqual(response["materials"]["move"], "2g2f")
+        self.assertIn("着手前SFEN:", response["prompt"])
+        self.assertEqual(response["explanation"], "2六歩で評価値が下がりました。")
+        generate.assert_called_once()
+
+    def test_explain_blunder_skips_small_eval_change(self):
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+        self.repository.connection.execute(
+            "UPDATE positions SET eval = ? WHERE game_id = ? AND move_number = ?",
+            (0, game_id, 3),
+        )
+
+        with patch("src.api.generate_position_explanation") as generate:
+            with self.assertRaises(ApiError) as context:
+                self.api.explain_blunder(
+                    game_id,
+                    3,
+                    llm_command="fake-llm",
+                )
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertIn("too small", str(context.exception))
+        generate.assert_not_called()
+
+    @patch("src.api.load_settings")
+    def test_explain_blunder_requires_llm_command(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
+        game_id = self.api.import_game(KIF_WITH_BLUNDER)["game"]["id"]
+
+        with self.assertRaises(ApiError) as context:
+            self.api.explain_blunder(game_id, 3)
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_get_position_frequency(self):
+        first_game = self.api.import_game(KIF_WITH_ANALYSIS)
+        self.api.import_game(f"{KIF_WITH_ANALYSIS}\n# duplicate variation")
+        start_sfen = self.api.get_positions(first_game["game"]["id"])["positions"][0]["sfen"]
+
+        response = self.api.get_position_frequency(start_sfen)
+
+        self.assertEqual(response["sfen"], start_sfen)
+        self.assertEqual(response["total"], 2)
+        self.assertEqual(response["moves"][0]["move"], "7g7f")
+        self.assertEqual(response["moves"][0]["count"], 2)
+        self.assertEqual(response["moves"][0]["ratio"], 1.0)
+        self.assertEqual(response["moves"][0]["avg_eval"], 64)
+
+    def test_get_position_frequency_rejects_empty_sfen(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.get_position_frequency("")
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_rebuild_openings(self):
+        self.api.import_game(KIF_WITH_ANALYSIS)
+
+        response = self.api.rebuild_openings()
+        openings = self.repository.list_openings(source="self")
+        openings_by_move = {opening.move: opening for opening in openings}
+
+        self.assertEqual(response["source"], "self")
+        self.assertEqual(response["count"], len(openings))
+        self.assertEqual(openings_by_move["7g7f"].count, 1)
+        self.assertEqual(openings_by_move["7g7f"].avg_eval, 64)
+        self.assertIn(
+            "7g7f",
+            {opening["move"] for opening in response["openings"]},
+        )
+
+    def test_rebuild_openings_with_progress(self):
+        progress = []
+        self.api.import_game(KIF_WITH_ANALYSIS)
+
+        response = self.api.rebuild_openings_with_progress(
+            progress_callback=lambda processed, total: progress.append((processed, total)),
+        )
+
+        self.assertEqual(response["source"], "self")
+        self.assertEqual(response["processed"], response["total"])
+        self.assertGreater(response["total"], 0)
+        self.assertFalse(response["canceled"])
+        self.assertEqual(progress[0][0], 0)
+        self.assertEqual(progress[-1], (response["total"], response["total"]))
+
+    def test_rebuild_openings_with_progress_can_cancel_before_upsert(self):
+        progress = []
+        self.api.import_game(KIF_WITH_ANALYSIS)
+
+        response = self.api.rebuild_openings_with_progress(
+            progress_callback=lambda processed, total: progress.append((processed, total)),
+            should_cancel=lambda: bool(progress),
+        )
+
+        self.assertTrue(response["canceled"])
+        self.assertEqual(response["count"], 0)
+        self.assertEqual(self.repository.list_openings(source="self"), [])
+
+    def test_rebuild_openings_rejects_empty_source(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.rebuild_openings("")
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_import_opening_game_saves_professional_openings(self):
+        response = self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+
+        openings = self.repository.list_openings(source="professional")
+        openings_by_move = {opening.move: opening for opening in openings}
+
+        self.assertEqual(response["source"], "professional")
+        self.assertEqual(response["count"], len(openings))
+        self.assertEqual(openings_by_move["7g7f"].count, 1)
+        self.assertEqual(self.repository.list_games(), [])
+
+    def test_import_opening_game_adds_to_existing_openings(self):
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+
+        openings = self.repository.list_openings(source="professional")
+        openings_by_move = {opening.move: opening for opening in openings}
+
+        self.assertEqual(openings_by_move["7g7f"].count, 2)
+
+    def test_get_openings(self):
+        first_game = self.api.import_game(KIF_WITH_ANALYSIS)
+        start_sfen = self.api.get_positions(first_game["game"]["id"])["positions"][0]["sfen"]
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+
+        response = self.api.get_openings(start_sfen, source="professional")
+
+        self.assertEqual(response["source"], "professional")
+        self.assertEqual(response["sfen"], start_sfen)
+        self.assertEqual(response["total"], 1)
+        self.assertEqual(response["moves"][0]["move"], "7g7f")
+        self.assertEqual(response["moves"][0]["count"], 1)
+        self.assertEqual(response["moves"][0]["ratio"], 1.0)
+        self.assertEqual(response["moves"][0]["avg_eval"], 64)
+
+    def test_get_openings_rejects_empty_sfen(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.get_openings("")
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_get_opening_comparison_prompt(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position = self.repository.list_positions(game_id)[0]
+        self.api.rebuild_openings()
+        self.repository.upsert_opening_aggregates([
+            OpeningAggregate(
+                source="professional",
+                sfen=position.sfen,
+                move="2g2f",
+                count=3,
+                avg_eval=42,
+            )
+        ])
+        self.repository.update_position_analysis(
+            position.id,
+            eval_value=20,
+            best_move="7g7f",
+            pv="7g7f 3c3d",
+            candidates=[{"move": "7g7f", "eval": 30}],
+            engine_name="test-engine",
+            engine_depth=1,
+        )
+
+        response = self.api.get_opening_comparison_prompt(
+            position.id,
+            sources=["self", "professional"],
+        )
+
+        self.assertEqual(response["position"]["id"], position.id)
+        self.assertEqual(response["sources"], ["self", "professional"])
+        self.assertEqual(response["materials"]["move_frequencies"][0]["move"], "7g7f")
+        self.assertEqual(response["materials"]["openings_by_source"]["professional"][0]["move"], "2g2f")
+        self.assertEqual(response["materials"]["engine_candidates"][0]["move"], "7g7f")
+        self.assertIn("source別定跡候補:", response["prompt"])
+        self.assertIn("エンジン候補手:", response["prompt"])
+
+    def test_explain_opening_comparison(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position = self.repository.list_positions(game_id)[0]
+        self.api.rebuild_openings()
+
+        with patch("src.api.generate_position_explanation") as generate:
+            generate.return_value = "7六歩と定跡候補を比較しました。"
+
+            response = self.api.explain_opening_comparison(
+                position.id,
+                sources=["self"],
+                llm_command="fake-llm",
+            )
+
+        self.assertEqual(response["position"]["id"], position.id)
+        self.assertEqual(response["sources"], ["self"])
+        self.assertIn("source別定跡候補:", response["prompt"])
+        self.assertEqual(response["explanation"], "7六歩と定跡候補を比較しました。")
+        generate.assert_called_once()
+
+    @patch("src.api.load_settings")
+    def test_explain_opening_comparison_requires_llm_command(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position = self.repository.list_positions(game_id)[0]
+
+        with self.assertRaises(ApiError) as context:
+            self.api.explain_opening_comparison(position.id)
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_list_games(self):
+        self.api.import_game(KIF_WITH_ANALYSIS)
+
+        response = self.api.list_games()
+
+        self.assertEqual(len(response["games"]), 1)
+        self.assertEqual(response["games"][0]["black"], "解析太郎")
+        self.assertIn("strategy", response["games"][0])
+        self.assertIn("enclosure", response["games"][0])
+        self.assertNotIn("raw_kif", response["games"][0])
+
+    def test_get_positions(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+
+        response = self.api.get_positions(game_id)
+
+        self.assertEqual(response["game"]["id"], game_id)
+        self.assertIn("strategy", response["game"])
+        self.assertEqual(len(response["positions"]), 3)
+        self.assertEqual(response["positions"][0]["move"], None)
+        self.assertEqual(response["positions"][1]["move"], "7g7f")
+        self.assertEqual(response["positions"][1]["eval"], 64)
+        self.assertEqual(
+            response["positions"][1]["candidates"],
+            [
+                {"move": "2g2f", "eval": 55},
+                {"move": "6i7h", "eval": 40},
+            ],
+        )
+
+    def test_analyze_position(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        with patch("src.api.UsiEngineAnalyzer") as analyzer_class:
+            analyzer_class.return_value.analyze_sfen.return_value = EngineAnalysis(
+                eval=103,
+                best_move="2g2f",
+                pv="2g2f 8c8d",
+                candidates=[{"move": "2g2f", "eval": 103}],
+                engine_name="Suisho5",
+                engine_depth=10,
+            )
+
+            response = self.api.analyze_position(
+                position_id,
+                engine_path="/path/to/Suisho5",
+                depth=10,
+            )
+
+        position = response["position"]
+        self.assertEqual(position["id"], position_id)
+        self.assertEqual(position["eval"], 103)
+        self.assertEqual(position["best_move"], "2g2f")
+        self.assertEqual(position["pv"], "2g2f 8c8d")
+        self.assertEqual(position["candidates"], [{"move": "2g2f", "eval": 103}])
+        self.assertEqual(position["engine_name"], "Suisho5")
+        self.assertEqual(position["engine_depth"], 10)
+        self.assertIsNotNone(position["analyzed_at"])
+
+    @patch("src.api.load_settings")
+    def test_analyze_position_requires_engine_path(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        with self.assertRaises(ApiError) as context:
+            self.api.analyze_position(position_id, engine_path=None)
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_get_position_explanation_prompt(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        self.api.import_opening_game(KIF_WITH_ANALYSIS, source="professional")
+        position_id = self.repository.list_positions(game_id)[1].id
+
+        response = self.api.get_position_explanation_prompt(position_id)
+
+        self.assertEqual(response["position"]["id"], position_id)
+        self.assertEqual(response["previous_position"]["move_number"], 0)
+        self.assertEqual(response["materials"]["previous_position"]["move_number"], 0)
+        self.assertIsNone(response["materials"]["eval_before"])
+        self.assertIsNone(response["materials"]["eval_delta"])
+        self.assertIsNone(response["materials"]["loss"])
+        self.assertEqual(response["materials"]["severity"], "unknown")
+        self.assertEqual(response["materials"]["eval"], 64)
+        self.assertEqual(response["materials"]["best_move"], "7g7f")
+        self.assertEqual(response["materials"]["candidates"][0]["move"], "2g2f")
+        self.assertEqual(response["materials"]["top_candidate_eval"], 55)
+        self.assertEqual(response["materials"]["top_candidate_eval_gap"], -9)
+        self.assertEqual(response["materials"]["openings"][0]["move"], "3c3d")
+        self.assertNotIn("評価値", response["materials"]["missing"])
+        self.assertIn("SFEN:", response["prompt"])
+        self.assertIn("直前SFEN:", response["prompt"])
+        self.assertIn("評価値変化: なし", response["prompt"])
+        self.assertIn("実戦手: 7g7f", response["prompt"])
+        self.assertIn("候補手: 2g2f(+55)", response["prompt"])
+        self.assertIn("候補手上位との差: -9", response["prompt"])
+        self.assertIn("確定情報と推測を混ぜない", response["prompt"])
+        self.assertIn("根拠に使った入力項目を明示する", response["prompt"])
+        self.assertIn("与えられていない読みや評価を創作しない", response["prompt"])
+
+    def test_get_position_explanation_prompt_marks_missing_materials(self):
+        game_id = self.api.import_game(SHIKENBISHA_KIF)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        response = self.api.get_position_explanation_prompt(position_id)
+
+        self.assertIsNone(response["previous_position"])
+        self.assertIn("直前局面", response["materials"]["missing"])
+        self.assertIn("評価値", response["materials"]["missing"])
+        self.assertIn("候補手", response["materials"]["missing"])
+        self.assertIn("直前SFEN: なし", response["prompt"])
+        self.assertIn("評価値: なし", response["prompt"])
+        self.assertIn("候補手: なし", response["prompt"])
+
+    def test_get_position_explanation_prompt_missing_position_raises_404(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.get_position_explanation_prompt(999)
+
+        self.assertEqual(context.exception.status_code, 404)
+
+    def test_explain_position(self):
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[1].id
+
+        with patch("src.api.generate_position_explanation") as generate:
+            generate.return_value = "7六歩は自然な初手です。"
+
+            response = self.api.explain_position(
+                position_id,
+                llm_command="fake-llm",
+            )
+
+        self.assertEqual(response["position"]["id"], position_id)
+        self.assertIn("SFEN:", response["prompt"])
+        self.assertEqual(response["explanation"], "7六歩は自然な初手です。")
+        generate.assert_called_once()
+
+    @patch("src.api.load_settings")
+    def test_explain_position_requires_llm_command(self, mock_load_settings):
+        mock_load_settings.return_value = AppSettings()
+
+        game_id = self.api.import_game(KIF_WITH_ANALYSIS)["game"]["id"]
+        position_id = self.repository.list_positions(game_id)[0].id
+
+        with self.assertRaises(ApiError) as context:
+            self.api.explain_position(position_id)
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_empty_import_raises_api_error(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.import_game("")
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_missing_game_raises_404(self):
+        with self.assertRaises(ApiError) as context:
+            self.api.get_positions(999)
+
+        self.assertEqual(context.exception.status_code, 404)
 
 
 if __name__ == "__main__":

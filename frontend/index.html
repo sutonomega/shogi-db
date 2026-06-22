@@ -32,33 +32,46 @@
 
       <section class="status-panel" id="statusPanel" hidden></section>
 
-      <section class="settings-panel" id="settingsPanel" aria-label="表示設定" hidden>
+      <section class="settings-panel" id="settingsPanel" aria-label="アプリ設定" hidden>
         <div class="panel-heading">
-          <h2>表示設定</h2>
-          <span>盤面と駒の見た目</span>
+          <h2>設定</h2>
+          <span id="settingsStatusText">未保存の変更はありません</span>
         </div>
-        <div class="settings-controls">
-          <label>
-            <span>盤面</span>
-            <select id="boardThemeSelect">
-              <option value="light">ライト</option>
-              <option value="warm">ウォーム</option>
-              <option value="resin">レジン</option>
-              <option value="dark">ダーク</option>
-            </select>
-          </label>
-          <label>
-            <span>駒</span>
-            <select id="pieceThemeSelect">
-              <option value="hitomoji">一文字</option>
-              <option value="hitomoji_wood">一文字 木目</option>
-              <option value="hitomoji_gothic">一文字 ゴシック</option>
-              <option value="hitomoji_dark">一文字 ダーク</option>
-              <option value="hitomoji_gothic_dark">一文字 ゴシックダーク</option>
-              <option value="futamoji">二文字</option>
-            </select>
-          </label>
-        </div>
+        <form class="settings-form" id="settingsForm">
+          <div class="settings-controls">
+            <label class="settings-field settings-field-wide">
+              <span>水匠エンジンのパス</span>
+              <input id="suishoEnginePathInput" type="text" autocomplete="off" placeholder="/mnt/share/Suisho5-AVX2.exe" />
+            </label>
+            <label class="settings-field settings-field-wide">
+              <span>LLM コマンド</span>
+              <input id="llmCommandInput" type="text" autocomplete="off" placeholder="ollama run llama3.1" />
+            </label>
+            <label class="settings-field">
+              <span>盤面</span>
+              <select id="boardThemeSelect">
+                <option value="light">ライト</option>
+                <option value="warm">ウォーム</option>
+                <option value="resin">レジン</option>
+                <option value="dark">ダーク</option>
+              </select>
+            </label>
+            <label class="settings-field">
+              <span>駒</span>
+              <select id="pieceThemeSelect">
+                <option value="hitomoji">一文字</option>
+                <option value="hitomoji_wood">一文字 木目</option>
+                <option value="hitomoji_gothic">一文字 ゴシック</option>
+                <option value="hitomoji_dark">一文字 ダーク</option>
+                <option value="hitomoji_gothic_dark">一文字 ゴシックダーク</option>
+                <option value="futamoji">二文字</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-actions">
+            <button id="saveSettingsButton" type="submit">設定を保存</button>
+          </div>
+        </form>
       </section>
 
       <section class="management-panel" id="gameRegistrationPanel" aria-label="棋譜登録">
