@@ -622,15 +622,15 @@ input {
   border-bottom: 0;
 }
 
-.piece.white {
-  transform: rotate(180deg);
-}
-
 .piece {
   display: grid;
   place-items: center;
   width: 82%;
   height: 82%;
+}
+
+.piece.white.text-piece {
+  transform: rotate(180deg);
 }
 
 .piece-image {

@@ -752,6 +752,7 @@ function renderPiece(piece) {
 
   const imagePath = pieceImagePath(piece, owner);
   if (!imagePath) {
+    span.classList.add("text-piece");
     span.textContent = label;
     return span;
   }
@@ -762,6 +763,7 @@ function renderPiece(piece) {
   image.alt = label;
   image.addEventListener("error", () => {
     image.remove();
+    span.classList.add("text-piece");
     span.textContent = label;
   }, { once: true });
   span.appendChild(image);
