@@ -593,6 +593,12 @@ class ShogiDbApi:
 
     def _build_position_explanation_payload(self, position: StoredPosition) -> dict:
         position_data = self._position_to_dict(position)
+        previous_position = self.repository.get_previous_position(position.id)
+        previous_position_data = (
+            self._position_to_dict(previous_position)
+            if previous_position is not None
+            else None
+        )
         openings = [
             self._opening_to_dict(opening, total=None)
             for opening in self.repository.list_openings(
@@ -600,9 +606,14 @@ class ShogiDbApi:
                 sfen=position.sfen,
             )
         ]
-        materials = build_position_explanation_materials(position_data, openings)
+        materials = build_position_explanation_materials(
+            position_data,
+            openings,
+            previous_position_data,
+        )
         return {
             "position": position_data,
+            "previous_position": previous_position_data,
             "materials": materials,
             "prompt": build_position_explanation_prompt(materials),
         }
