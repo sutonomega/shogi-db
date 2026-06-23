@@ -1857,7 +1857,17 @@ async function analyzeCurrentPositionForCandidates() {
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
     if (payload.position) {
-      state.positions[state.currentMove] = payload.position;
+      const current = state.positions[state.currentMove];
+      state.positions[state.currentMove] = {
+        ...current,
+        ...payload.position,
+        eval: current.eval,
+        best_move: payload.position.best_move ?? current.best_move,
+        pv: payload.position.pv ?? current.pv,
+        candidates: Array.isArray(payload.position.candidates)
+          ? payload.position.candidates
+          : current.candidates,
+      };
     }
     state.selectedCandidateMove = null;
     state.candidateStatusText = "局面解析が完了しました";
